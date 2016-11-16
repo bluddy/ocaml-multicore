@@ -30,22 +30,22 @@
 
 #ifndef NATIVE_CODE
 
-CAMLprim value caml_get_global_data(value unit)
+CAMLprim value caml_get_global_data(cdst cds, value unit)
 {
-  return caml_read_root(caml_global_data);
+  return caml_read_root(cds, caml_global_data);
 }
 
 char * caml_section_table = NULL;
 asize_t caml_section_table_size;
 
-CAMLprim value caml_get_section_table(value unit)
+CAMLprim value caml_get_section_table(cdst cds, value unit)
 {
   if (caml_section_table == NULL) caml_raise_not_found();
-  return caml_input_value_from_block(caml_section_table,
+  return caml_input_value_from_block(cds, caml_section_table,
                                      caml_section_table_size);
 }
 
-CAMLprim value caml_reify_bytecode(value prog, value len)
+CAMLprim value caml_reify_bytecode(cdst cds, value prog, value len)
 {
   value clos;
 #ifdef ARCH_BIG_ENDIAN
@@ -54,12 +54,12 @@ CAMLprim value caml_reify_bytecode(value prog, value len)
 #ifdef THREADED_CODE
   caml_thread_code((code_t) prog, (asize_t) Long_val(len));
 #endif
-  clos = caml_alloc_small (1, Closure_tag);
+  clos = caml_alloc_small (cds, 1, Closure_tag);
   Init_field(clos, 0, Val_bytecode(prog));
   return clos;
 }
 
-CAMLprim value caml_register_code_fragment(value prog, value len, value digest)
+CAMLprim value caml_register_code_fragment(cdst cds, value prog, value len, value digest)
 {
   struct code_fragment * cf = caml_stat_alloc(sizeof(struct code_fragment));
   cf->code_start = (char *) prog;
@@ -70,10 +70,10 @@ CAMLprim value caml_register_code_fragment(value prog, value len, value digest)
   return Val_unit;
 }
 
-CAMLprim value caml_realloc_global(value size)
+CAMLprim value caml_realloc_global(cdst cds, value size)
 {
   mlsize_t requested_size, actual_size, i;
-  value old_global_data = caml_read_root(caml_global_data);
+  value old_global_data = caml_read_root(cds, caml_global_data);
   value new_global_data;
 
   requested_size = Long_val(size);
@@ -82,23 +82,23 @@ CAMLprim value caml_realloc_global(value size)
     requested_size = (requested_size + 0x100) & 0xFFFFFF00;
     caml_gc_log ("Growing global data to %u entries",
                  (unsigned)requested_size);
-    new_global_data = caml_alloc_shr(requested_size, 0);
+    new_global_data = caml_alloc_shr(cds, requested_size, 0);
     for (i = 0; i < actual_size; i++)
-      caml_initialize_field(new_global_data, i, Field(old_global_data, i));
+      caml_initialize_field(cds, new_global_data, i, Field(old_global_data, i));
     for (i = actual_size; i < requested_size; i++){
-      caml_initialize_field(new_global_data, i, Val_long(0));
+      caml_initialize_field(cds, new_global_data, i, Val_long(0));
     }
-    caml_modify_root(caml_global_data, new_global_data);
+    caml_modify_root(cds, caml_global_data, new_global_data);
   }
   return Val_unit;
 }
 
-CAMLprim value caml_get_current_environment(value unit)
+CAMLprim value caml_get_current_environment(cdst cds, value unit)
 {
   return *CAML_DOMAIN_STATE->extern_sp;
 }
 
-CAMLprim value caml_invoke_traced_function(value codeptr, value env, value arg)
+CAMLprim value caml_invoke_traced_function(cdst cds, value codeptr, value env, value arg)
 {
   /* Stack layout on entry:
        return frame into instrument_closure function

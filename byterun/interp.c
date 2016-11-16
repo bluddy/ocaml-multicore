@@ -191,7 +191,7 @@ static __thread intnat caml_bcodcount;
 static caml_root raise_unhandled;
 
 /* The interpreter itself */
-value caml_interprete(code_t prog, asize_t prog_size)
+value caml_interprete(cdst cds, code_t prog, asize_t prog_size)
 {
 #ifdef PC_REG
   register code_t pc PC_REG;
@@ -236,11 +236,11 @@ value caml_interprete(code_t prog, asize_t prog_size)
                      sizeof(raise_unhandled_code));
 #endif
     value raise_unhandled_closure =
-      caml_alloc_small(1, Closure_tag);
+      caml_alloc_small(cds, 1, Closure_tag);
     Init_field(raise_unhandled_closure, 0,
                Val_bytecode(raise_unhandled_code));
-    raise_unhandled = caml_create_root(raise_unhandled_closure);
-    caml_global_data = caml_create_root(Val_unit);
+    raise_unhandled = caml_create_root(cds, raise_unhandled_closure);
+    caml_global_data = caml_create_root(cds, Val_unit);
     caml_init_callbacks();
     return Val_unit;
   }
@@ -502,7 +502,7 @@ value caml_interprete(code_t prog, asize_t prog_size)
         Assert(parent_stack != Val_long(0));
 
         CAML_DOMAIN_STATE->extern_sp = sp;
-        value old_stack = caml_switch_stack(parent_stack);
+        value old_stack = caml_switch_stack(cds, parent_stack);
         sp = CAML_DOMAIN_STATE->extern_sp;
         Stack_parent(old_stack) = Val_long(0);
 
@@ -566,9 +566,9 @@ value caml_interprete(code_t prog, asize_t prog_size)
         /* PR#6385: must allocate in major heap */
         /* caml_alloc_shr and caml_initialize never trigger a GC,
            so no need to Setup_for_gc */
-        accu = caml_alloc_shr(1 + nvars, Closure_tag);
+        accu = caml_alloc_shr(cds, 1 + nvars, Closure_tag);
         for (i = 0; i < nvars; i++)
-          caml_initialize_field(accu, i + 1, sp[i]);
+          caml_initialize_field(cds, accu, i + 1, sp[i]);
       }
       /* The code pointer is not in the heap, so no need to go through
          caml_initialize. */
@@ -594,9 +594,9 @@ value caml_interprete(code_t prog, asize_t prog_size)
         /* PR#6385: must allocate in major heap */
         /* caml_alloc_shr and caml_initialize never trigger a GC,
            so no need to Setup_for_gc */
-        accu = caml_alloc_shr(blksize, Closure_tag);
+        accu = caml_alloc_shr(cds, blksize, Closure_tag);
         for (i = 0; i < nvars; i++)
-          caml_initialize_field(accu, var_offset + i,sp[i]);
+          caml_initialize_field(cds, accu, var_offset + i,sp[i]);
       }
       sp += nvars;
       /* The code pointers and infix headers are not in the heap,
@@ -640,7 +640,7 @@ value caml_interprete(code_t prog, asize_t prog_size)
       *--sp = accu;
       /* Fallthrough */
     Instruct(GETGLOBAL):
-      accu = Field(caml_read_root(caml_global_data), *pc);
+      accu = Field(caml_read_root(cds, caml_global_data), *pc);
       pc++;
       Next;
 
@@ -648,7 +648,7 @@ value caml_interprete(code_t prog, asize_t prog_size)
       *--sp = accu;
       /* Fallthrough */
     Instruct(GETGLOBALFIELD): {
-      accu = Field(caml_read_root(caml_global_data), *pc);
+      accu = Field(caml_read_root(cds, caml_global_data), *pc);
       pc++;
       accu = Field(accu, *pc);
       pc++;
@@ -656,8 +656,8 @@ value caml_interprete(code_t prog, asize_t prog_size)
     }
 
     Instruct(SETGLOBAL):
-      accu = caml_promote(caml_domain_self(), accu);
-      caml_modify_field(caml_read_root(caml_global_data), *pc, accu);
+      accu = caml_promote(cds, caml_domain_self(), accu);
+      caml_modify_field(cds, caml_read_root(cds, caml_global_data), *pc, accu);
       accu = Val_unit;
       pc++;
       Next;
@@ -687,10 +687,10 @@ value caml_interprete(code_t prog, asize_t prog_size)
         for (i = 1; i < wosize; i++) Init_field(block, i, *sp++);
       } else {
         Setup_for_gc;
-        block = caml_alloc_shr(wosize, tag);
+        block = caml_alloc_shr(cds, wosize, tag);
         Restore_after_gc;
-        caml_initialize_field(block, 0, accu);
-        for (i = 1; i < wosize; i++) caml_initialize_field(block, i, *sp++);
+        caml_initialize_field(cds, block, 0, accu);
+        for (i = 1; i < wosize; i++) caml_initialize_field(cds, block, i, *sp++);
       }
       accu = block;
       Next;
@@ -732,7 +732,7 @@ value caml_interprete(code_t prog, asize_t prog_size)
         Alloc_small(block, size * Double_wosize, Double_array_tag);
       } else {
         Setup_for_gc;
-        block = caml_alloc_shr(size * Double_wosize, Double_array_tag);
+        block = caml_alloc_shr(cds, size * Double_wosize, Double_array_tag);
         Restore_after_gc;
       }
       Store_double_field(block, 0, Double_val(accu));
@@ -775,23 +775,23 @@ value caml_interprete(code_t prog, asize_t prog_size)
     }
 
     Instruct(SETFIELD0):
-      caml_modify_field(accu, 0, *sp++);
+      caml_modify_field(cds, accu, 0, *sp++);
       accu = Val_unit;
       Next;
     Instruct(SETFIELD1):
-      caml_modify_field(accu, 1, *sp++);
+      caml_modify_field(cds, accu, 1, *sp++);
       accu = Val_unit;
       Next;
     Instruct(SETFIELD2):
-      caml_modify_field(accu, 2, *sp++);
+      caml_modify_field(cds, accu, 2, *sp++);
       accu = Val_unit;
       Next;
     Instruct(SETFIELD3):
-      caml_modify_field(accu, 3, *sp++);
+      caml_modify_field(cds, accu, 3, *sp++);
       accu = Val_unit;
       Next;
     Instruct(SETFIELD):
-      caml_modify_field(accu, *pc, *sp++);
+      caml_modify_field(cds, accu, *pc, *sp++);
       accu = Val_unit;
       pc++;
       Next;
@@ -815,7 +815,7 @@ value caml_interprete(code_t prog, asize_t prog_size)
       sp += 1;
       Next;
     Instruct(SETVECTITEM):
-      caml_modify_field(accu, Long_val(sp[0]), sp[1]);
+      caml_modify_field(cds, accu, Long_val(sp[0]), sp[1]);
       accu = Val_unit;
       sp += 2;
       Next;
@@ -886,18 +886,18 @@ value caml_interprete(code_t prog, asize_t prog_size)
 
     Instruct(RAISE_NOTRACE):
       if (CAML_DOMAIN_STATE->trap_sp_off >= CAML_DOMAIN_STATE->trap_barrier_off)
-        caml_debugger(TRAP_BARRIER);
+        caml_debugger(cds, TRAP_BARRIER);
       goto raise_notrace;
 
     Instruct(RERAISE):
-      if (CAML_DOMAIN_STATE->trap_sp_off >= CAML_DOMAIN_STATE->trap_barrier_off) caml_debugger(TRAP_BARRIER);
-      if (CAML_DOMAIN_STATE->backtrace_active) caml_stash_backtrace(accu, pc, sp, 1);
+      if (CAML_DOMAIN_STATE->trap_sp_off >= CAML_DOMAIN_STATE->trap_barrier_off) caml_debugger(cds, TRAP_BARRIER);
+      if (CAML_DOMAIN_STATE->backtrace_active) caml_stash_backtrace(cds, accu, pc, sp, 1);
       goto raise_notrace;
 
     Instruct(RAISE):
     raise_exception:
-      if (CAML_DOMAIN_STATE->trap_sp_off >= CAML_DOMAIN_STATE->trap_barrier_off) caml_debugger(TRAP_BARRIER);
-      if (CAML_DOMAIN_STATE->backtrace_active) caml_stash_backtrace(accu, pc, sp, 0);
+      if (CAML_DOMAIN_STATE->trap_sp_off >= CAML_DOMAIN_STATE->trap_barrier_off) caml_debugger(cds, TRAP_BARRIER);
+      if (CAML_DOMAIN_STATE->backtrace_active) caml_stash_backtrace(cds, accu, pc, sp, 0);
     raise_notrace:
       if (CAML_DOMAIN_STATE->trap_sp_off > 0) {
         if (Stack_parent(CAML_DOMAIN_STATE->current_stack) == Val_long(0)) {
@@ -910,7 +910,7 @@ value caml_interprete(code_t prog, asize_t prog_size)
           value parent_stack = Stack_parent(CAML_DOMAIN_STATE->current_stack);
           value hexn = Stack_handle_exception(CAML_DOMAIN_STATE->current_stack);
           CAML_DOMAIN_STATE->extern_sp = sp;
-          value old_stack = caml_switch_stack(parent_stack);
+          value old_stack = caml_switch_stack(cds, parent_stack);
           sp = CAML_DOMAIN_STATE->extern_sp;
           Stack_parent(old_stack) = Val_long(0);
 
@@ -942,7 +942,7 @@ value caml_interprete(code_t prog, asize_t prog_size)
       if (sp < CAML_DOMAIN_STATE->stack_threshold) {
         value saved[] = {env, accu};
         CAML_DOMAIN_STATE->extern_sp = sp;
-        caml_realloc_stack(Stack_threshold / sizeof(value), saved, 2);
+        caml_realloc_stack(cds, Stack_threshold / sizeof(value), saved, 2);
         sp = CAML_DOMAIN_STATE->extern_sp;
         env = saved[0];
         accu = saved[1];
@@ -957,7 +957,7 @@ value caml_interprete(code_t prog, asize_t prog_size)
 
     process_signal:
       Setup_for_event;
-      caml_handle_gc_interrupt();
+      caml_handle_gc_interrupt(cds);
       Restore_after_event;
       Next;
 
@@ -1049,13 +1049,13 @@ value caml_interprete(code_t prog, asize_t prog_size)
 
     Instruct(DIVINT): {
       intnat divisor = Long_val(*sp++);
-      if (divisor == 0) { Setup_for_c_call; caml_raise_zero_divide(); }
+      if (divisor == 0) { Setup_for_c_call; caml_raise_zero_divide(cds); }
       accu = Val_long(Long_val(accu) / divisor);
       Next;
     }
     Instruct(MODINT): {
       intnat divisor = Long_val(*sp++);
-      if (divisor == 0) { Setup_for_c_call; caml_raise_zero_divide(); }
+      if (divisor == 0) { Setup_for_c_call; caml_raise_zero_divide(cds); }
       accu = Val_long(Long_val(accu) % divisor);
       Next;
     }
@@ -1217,14 +1217,14 @@ value caml_interprete(code_t prog, asize_t prog_size)
     Instruct(EVENT):
       if (--caml_event_count == 0) {
         Setup_for_debugger;
-        caml_debugger(EVENT_COUNT);
+        caml_debugger(cds, EVENT_COUNT);
         Restore_after_debugger;
       }
       Restart_curr_instr;
 
     Instruct(BREAK):
       Setup_for_debugger;
-      caml_debugger(BREAKPOINT);
+      caml_debugger(cds, BREAKPOINT);
       Restore_after_debugger;
       Restart_curr_instr;
 
@@ -1243,10 +1243,10 @@ value caml_interprete(code_t prog, asize_t prog_size)
       goto do_resume;
 
 do_resume:
-      accu = caml_find_performer(accu);
+      accu = caml_find_performer(cds, accu);
 
       CAML_DOMAIN_STATE->extern_sp = sp;
-      caml_switch_stack(accu);
+      caml_switch_stack(cds, accu);
       sp = CAML_DOMAIN_STATE->extern_sp;
 
       CAML_DOMAIN_STATE->trap_sp_off = Long_val(sp[0]);
@@ -1272,7 +1272,7 @@ do_resume:
       value heff = Stack_handle_effect(CAML_DOMAIN_STATE->current_stack);
 
       if (parent_stack == Val_long(0)) {
-        accu = Field(caml_read_root(caml_global_data), UNHANDLED_EXN);
+        accu = Field(caml_read_root(cds, caml_global_data), UNHANDLED_EXN);
         goto raise_exception;
       }
 
@@ -1283,7 +1283,7 @@ do_resume:
       sp[3] = Val_long(extra_args);
 
       CAML_DOMAIN_STATE->extern_sp = sp;
-      value old_stack = caml_switch_stack(parent_stack);
+      value old_stack = caml_switch_stack(cds, parent_stack);
       sp = CAML_DOMAIN_STATE->extern_sp;
       Stack_parent(old_stack) = Val_long(0);
 
@@ -1310,15 +1310,15 @@ do_resume:
 
       if (parent == Val_long(0)) {
         accu = performer;
-        resume_fn = caml_read_root(raise_unhandled);
-        resume_arg = Field(caml_read_root(caml_global_data), UNHANDLED_EXN);
+        resume_fn = caml_read_root(cds, raise_unhandled);
+        resume_arg = Field(caml_read_root(cds, caml_global_data), UNHANDLED_EXN);
         goto do_resume;
       }
 
       Stack_parent(self) = performer;
 
       CAML_DOMAIN_STATE->extern_sp = sp;
-      value old_stack = caml_switch_stack(parent);
+      value old_stack = caml_switch_stack(cds, parent);
       sp = CAML_DOMAIN_STATE->extern_sp;
       Assert(old_stack == self);
 

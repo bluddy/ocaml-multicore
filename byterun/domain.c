@@ -123,7 +123,7 @@ asize_t caml_norm_minor_heap_size (intnat wsize)
   return bs;
 }
 
-void caml_reallocate_minor_heap(asize_t size)
+void caml_reallocate_minor_heap(cdst cds, asize_t size)
 {
   Assert(CAML_DOMAIN_STATE->young_ptr == CAML_DOMAIN_STATE->young_end);
 
@@ -152,8 +152,9 @@ void caml_reallocate_minor_heap(asize_t size)
 }
 
 /* must be run on the domain's thread */
-static void create_domain(uintnat initial_minor_heap_size, int is_main) {
+static cdst create_domain(uintnat initial_minor_heap_size, int is_main) {
   int i;
+  cdst cds = NULL;
   dom_internal* d = 0;
   Assert (domain_self == 0);
 
@@ -175,7 +176,9 @@ static void create_domain(uintnat initial_minor_heap_size, int is_main) {
     atomic_store_rel(&d->rpc_request, RPC_IDLE);
 
     domain_self = d;
-    SET_CAML_DOMAIN_STATE((void*)(d->tls_area));
+    SET_CAML_TL_DOMAIN_STATE((void*)(d->tls_area));
+    cds = (void *)d->tls_area;
+
     caml_plat_lock(&d->roots_lock);
 
     if (!d->interrupt_word_address) {
@@ -192,10 +195,10 @@ static void create_domain(uintnat initial_minor_heap_size, int is_main) {
             sizeof(struct caml_remembered_set));
 
     d->outer.shared_heap = caml_init_shared_heap();
-    caml_init_major_gc();
-    caml_reallocate_minor_heap(initial_minor_heap_size);
+    caml_init_major_gc(cds);
+    caml_reallocate_minor_heap(cds, initial_minor_heap_size);
 
-    caml_init_main_stack();
+    caml_init_main_stack(cds);
 
     d->outer.mark_stack = &CAML_DOMAIN_STATE->mark_stack;
     d->outer.mark_stack_count = &CAML_DOMAIN_STATE->mark_stack_count;
@@ -209,11 +212,13 @@ static void create_domain(uintnat initial_minor_heap_size, int is_main) {
 #endif
   }
   caml_plat_unlock(&all_domains_lock);
+  return cds;
 }
 
 
-void caml_init_domains(uintnat minor_size) {
+cdst caml_init_domains(uintnat minor_size) {
   int i;
+  cdst cds;
   uintnat size;
   void* heaps_base;
 
@@ -254,17 +259,20 @@ void caml_init_domains(uintnat minor_size) {
   }
 
 
-  create_domain(minor_size, 1);
+  cds = create_domain(minor_size, 1);
   if (!domain_self) caml_fatal_error("Failed to create main domain");
 
   caml_init_global_roots();
-  caml_init_signal_handling();
+  caml_init_signal_handling(cds);
+  return cds;
 }
 
-void caml_init_domain_self(int domain_id) {
+cdst caml_init_domain_self(int domain_id) {
+  cdst cds = domain_self->outer.state;
   Assert (domain_id >= 0 && domain_id < Max_domains);
   domain_self = &all_domains[domain_id];
-  SET_CAML_DOMAIN_STATE(domain_self->outer.state);
+  SET_CAML_TL_DOMAIN_STATE(cds);
+  return cds;
 }
 
 static void domain_terminate() {
@@ -283,18 +291,18 @@ struct domain_startup_params {
 };
 
 static void* domain_thread_func(void* v) {
+  cdst cds = create_domain(caml_startup_params.minor_heap_init, 0);
   CAMLparam0();
   CAMLlocal1(callback);
   struct domain_startup_params* p = v;
 
   callback = p->callback;
-  create_domain(caml_startup_params.minor_heap_init, 0);
   p->newdom = domain_self;
   caml_plat_event_trigger(&p->ev);
 
   if (domain_self) {
     caml_gc_log("Domain starting");
-    caml_callback(callback, Val_unit);
+    caml_callback(cds, callback, Val_unit);
     domain_terminate();
   } else {
     caml_gc_log("Failed to create domain");
@@ -303,7 +311,7 @@ static void* domain_thread_func(void* v) {
 }
 
 
-CAMLprim value caml_domain_spawn(value callback)
+CAMLprim value caml_domain_spawn(cdst cds, value callback)
 {
   CAMLparam1 (callback);
   struct domain_startup_params p;
@@ -311,7 +319,7 @@ CAMLprim value caml_domain_spawn(value callback)
   int err;
 
   caml_plat_event_init(&p.ev);
-  p.callback = caml_promote(&domain_self->outer, callback);
+  p.callback = caml_promote(cds, &domain_self->outer, callback);
 
   err = pthread_create(&th, 0, domain_thread_func, (void*)&p);
   if (err) {
@@ -415,19 +423,19 @@ void caml_urge_major_slice (void)
 }
 
 
-static void stw_phase(void);
-static int check_rpc(void);
+static void stw_phase(cdst);
+static int check_rpc(cdst);
 
-void caml_handle_gc_interrupt() {
+void caml_handle_gc_interrupt(cdst cds) {
   atomic_uintnat* young_limit = domain_self->interrupt_word_address;
   if (atomic_load_acq(young_limit) == INTERRUPT_MAGIC) {
     /* interrupt */
     while (atomic_load_acq(young_limit) == INTERRUPT_MAGIC) {
       atomic_cas(young_limit, INTERRUPT_MAGIC, domain_self->minor_heap_area);
     }
-    check_rpc();
+    check_rpc(cds);
     if (atomic_load_acq(&stw_requested)) {
-      stw_phase();
+      stw_phase(cds);
     }
   }
 
@@ -436,7 +444,7 @@ void caml_handle_gc_interrupt() {
       caml_force_major_slice) {
     /* out of minor heap or collection forced */
     caml_force_major_slice = 0;
-    caml_minor_collection();
+    caml_minor_collection(cds);
   }
 }
 
@@ -456,16 +464,19 @@ CAMLexport void (*caml_enter_blocking_section_hook)(void) =
 CAMLexport void (*caml_leave_blocking_section_hook)(void) =
    caml_leave_blocking_section_default;
 
+/* Blocking section doesn't take cds as it spreads cds too far */
 CAMLexport void caml_leave_blocking_section() {
+  cdst cds = CAML_TL_DOMAIN_STATE;
   caml_plat_lock(&domain_self->roots_lock);
   caml_leave_blocking_section_hook();
-  caml_restore_stack_gc();
-  caml_process_pending_signals();
+  caml_restore_stack_gc(cds);
+  caml_process_pending_signals(cds);
 }
 
 CAMLexport void caml_enter_blocking_section() {
-  caml_process_pending_signals();
-  caml_save_stack_gc();
+  cdst cds = CAML_TL_DOMAIN_STATE;
+  caml_process_pending_signals(cds);
+  caml_save_stack_gc(cds);
   caml_enter_blocking_section_hook();
   caml_plat_unlock(&domain_self->roots_lock);
 }
@@ -474,7 +485,7 @@ CAMLexport void caml_enter_blocking_section() {
 static atomic_uintnat heaps_marked;
 static atomic_uintnat domain_accounted_for[Max_domains];
 
-static void stw_phase () {
+static void stw_phase (cdst cds) {
   int i;
   int my_heaps = 0;
   char inactive_domains_locked[Max_domains] = {0};
@@ -499,7 +510,7 @@ static void stw_phase () {
       } else {
         /* locked by some other thread,
            but not yet accounted for, need to wait */
-        check_rpc();
+        check_rpc(cds);
       }
     }
   }
@@ -516,14 +527,14 @@ static void stw_phase () {
     if (d == domain_self) {
       /* finish GC */
       while (caml_sweep(d->outer.shared_heap, 10) <= 0);
-      caml_empty_minor_heap();
-      caml_finish_marking();
+      caml_empty_minor_heap(cds);
+      caml_finish_marking(cds);
     } else if (domain_is_locked(d)) {
       /* GC some inactive domain that we locked */
       caml_gc_log("GCing inactive domain [%02d]", d->outer.id);
       while (caml_sweep(d->outer.shared_heap, 10) <= 0);
-      caml_do_sampled_roots(&caml_darken, &d->outer);
-      caml_empty_mark_stack();
+      caml_do_sampled_roots(cds, &caml_darken, &d->outer);
+      caml_empty_mark_stack(cds);
     }
   }
 
@@ -551,7 +562,7 @@ static void stw_phase () {
       if (atomic_load_acq(&heaps_marked) == 0)
         break;
       Assert(atomic_load_acq(&heaps_marked) <= Max_domains);
-      check_rpc();
+      check_rpc(cds);
     }
     caml_gc_log("GC cycle completed");
   }
@@ -570,7 +581,7 @@ static void stw_phase () {
 }
 
 
-static int handle_rpc(dom_internal* target)
+static int handle_rpc(cdst cds, dom_internal* target)
 {
   int r = 0;
   if (atomic_load_acq(&target->rpc_request) != RPC_IDLE) {
@@ -590,7 +601,7 @@ static int handle_rpc(dom_internal* target)
       /* we have a copy of the request, it is now safe for other domains to overwrite it */
       atomic_store_rel(&target->rpc_request, RPC_IDLE);
       /* handle the request */
-      rpc_handler(&target->outer, rpc_data);
+      rpc_handler(cds, &target->outer, rpc_data);
       /* signal completion */
       atomic_store_rel(rpc_completion_signal, 1);
     }
@@ -602,26 +613,26 @@ static int handle_rpc(dom_internal* target)
 /* Handle incoming RPC requests for the current domain,
    and any domains we have temporarily taken over.
    Returns nonzero if any RPC requests were handled. */
-static int check_rpc()
+static int check_rpc(cdst cds)
 {
   int i, res = 0;
-  res |= handle_rpc(domain_self);
+  res |= handle_rpc(cds, domain_self);
   for (i = 0; i < Max_domains; i++) {
     dom_internal* d = &all_domains[i];
     if (domain_is_locked(d))
-      res |= handle_rpc(d);
+      res |= handle_rpc(cds, d);
   }
   return res;
 }
 
-static int attempt_rpc_takeover(dom_internal* target) {
+static int attempt_rpc_takeover(cdst cds, dom_internal* target) {
   int res;
   if (try_lock_domain(target)) {
     /* process pending RPC for this domain */
-    res = check_rpc();
+    res = check_rpc(cds);
     unlock_domain(target);
   } else {
-    res = check_rpc();
+    res = check_rpc(cds);
   }
   return res;
 }
@@ -631,7 +642,7 @@ static int attempt_rpc_takeover(dom_internal* target) {
    message will be processed during an RPC safepoint in the target
    domain (or while holding the target domain's roots_lock).
    target domain must not be current domain */
-CAMLexport void caml_domain_rpc(struct domain* domain,
+CAMLexport void caml_domain_rpc(cdst cds, struct domain* domain,
                                 domain_rpc_handler handler, void* data)
 {
   atomic_uintnat completed = ATOMIC_UINTNAT_INIT(0);
@@ -639,7 +650,7 @@ CAMLexport void caml_domain_rpc(struct domain* domain,
 
   if (target == domain_self || domain_is_locked(target)) {
     /* well that was easy */
-    handler(&target->outer, data);
+    handler(cds, &target->outer, data);
     return;
   }
 
@@ -652,7 +663,7 @@ CAMLexport void caml_domain_rpc(struct domain* domain,
        so that backoff time does not increase */
     SPIN_WAIT {
       if (atomic_load_acq(&target->rpc_request) == RPC_IDLE) break;
-      if (attempt_rpc_takeover(target)) break;
+      if (attempt_rpc_takeover(cds, target)) break;
     }
   }
 
@@ -669,7 +680,7 @@ CAMLexport void caml_domain_rpc(struct domain* domain,
        so that backoff time does not increase */
     SPIN_WAIT {
       if (atomic_load_acq(&completed)) break;
-      if (attempt_rpc_takeover(target)) break;
+      if (attempt_rpc_takeover(cds, target)) break;
     }
   }
 }

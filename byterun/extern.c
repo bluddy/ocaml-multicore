@@ -61,10 +61,10 @@ static struct extern_item * extern_stack_limit = extern_stack_init
 
 /* Forward declarations */
 
-static void extern_out_of_memory(void);
+static void extern_out_of_memory();
 static void extern_invalid_argument(char *msg);
 static void extern_failwith(char *msg);
-static void extern_stack_overflow(void);
+static void extern_stack_overflow();
 static void free_extern_output(void);
 
 /* Free the extern stack if needed */
@@ -119,7 +119,7 @@ struct output_block {
 
 static struct output_block * extern_output_first, * extern_output_block;
 
-static void init_extern_output(void)
+static void init_extern_output()
 {
   extern_userprovided_output = NULL;
   extern_output_first = malloc(sizeof(struct output_block));
@@ -188,7 +188,7 @@ static intnat extern_output_length(void)
 
 /* Exception raising, with cleanup */
 
-static void extern_out_of_memory(void)
+static void extern_out_of_memory()
 {
   caml_addrmap_clear(&recorded_objs);
   free_extern_output();
@@ -209,7 +209,7 @@ static void extern_failwith(char *msg)
   caml_failwith(msg);
 }
 
-static void extern_stack_overflow(void)
+static void extern_stack_overflow()
 {
   caml_gc_log ("Stack overflow in marshaling value");
   caml_addrmap_clear(&recorded_objs);
@@ -288,7 +288,7 @@ static void writecode64(int code, intnat val)
 
 /* Marshal the given value in the output buffer */
 
-static void extern_rec(value v)
+static void extern_rec(cdst cds, value v)
 {
   struct extern_item * sp;
   sp = extern_stack;
@@ -498,8 +498,9 @@ static int extern_flag_values[] = { NO_SHARING, CLOSURES, COMPAT_32 };
 static intnat extern_value(value v, value flags)
 {
   intnat res_len;
+  cdst cds = CAML_TL_DOMAIN_STATE;
   /* Parse flag list */
-  extern_flags = caml_convert_flag_list(flags, extern_flag_values);
+  extern_flags = caml_convert_flag_list(cds, flags, extern_flag_values);
   /* Initializations */
   caml_addrmap_clear(&recorded_objs);
   obj_counter = 0;
@@ -510,7 +511,7 @@ static intnat extern_value(value v, value flags)
   /* Set aside space for the sizes */
   extern_ptr += 4*4;
   /* Marshal the object */
-  extern_rec(v);
+  extern_rec(cds, v);
   /* Record end of output */
   close_extern_output();
   /* Delete the hashtable of recorded objects */
@@ -560,7 +561,7 @@ void caml_output_val(struct channel *chan, value v, value flags)
   }
 }
 
-CAMLprim value caml_output_value(value vchan, value v, value flags)
+CAMLprim value caml_output_value(cdst cds, value vchan, value v, value flags)
 {
   CAMLparam3 (vchan, v, flags);
   struct channel * channel = Channel(vchan);
@@ -571,7 +572,7 @@ CAMLprim value caml_output_value(value vchan, value v, value flags)
   CAMLreturn (Val_unit);
 }
 
-CAMLprim value caml_output_value_to_string(value v, value flags)
+CAMLprim value caml_output_value_to_string(cdst cds, value v, value flags)
 {
   intnat len, ofs;
   value res;
@@ -582,7 +583,7 @@ CAMLprim value caml_output_value_to_string(value v, value flags)
   /* PR#4030: it is prudent to save extern_output_first before allocating
      the result, as in caml_output_val */
   blk = extern_output_first;
-  res = caml_alloc_string(len);
+  res = caml_alloc_string(cds, len);
   ofs = 0;
   while (blk != NULL) {
     int n = blk->end - blk->data;
@@ -595,7 +596,7 @@ CAMLprim value caml_output_value_to_string(value v, value flags)
   return res;
 }
 
-CAMLprim value caml_output_value_to_buffer(value buf, value ofs, value len,
+CAMLprim value caml_output_value_to_buffer(cdst cds, value buf, value ofs, value len,
                                            value v, value flags)
 {
   intnat len_res;

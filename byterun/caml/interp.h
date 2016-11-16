@@ -20,6 +20,6 @@
 #include "mlvalues.h"
 
 /* interpret a bytecode */
-value caml_interprete (code_t prog, asize_t prog_size);
+value caml_interprete (cdst cds, code_t prog, asize_t prog_size);
 
 #endif /* CAML_INTERP_H */

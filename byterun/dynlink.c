@@ -200,7 +200,7 @@ void caml_build_primitive_table_builtin(void)
 
 #define Handle_val(v) (*((void **) (v)))
 
-CAMLprim value caml_dynlink_open_lib(value mode, value filename)
+CAMLprim value caml_dynlink_open_lib(cdst cds, value mode, value filename)
 {
   void * handle;
   value result;
@@ -214,19 +214,19 @@ CAMLprim value caml_dynlink_open_lib(value mode, value filename)
   caml_stat_free(p);
 
   if (handle == NULL) caml_failwith(caml_dlerror());
-  result = caml_alloc_small(1, Abstract_tag);
+  result = caml_alloc_small(cds, 1, Abstract_tag);
   Handle_val(result) = handle;
   return result;
 }
 
-CAMLprim value caml_dynlink_close_lib(value handle)
+CAMLprim value caml_dynlink_close_lib(cdst cds, value handle)
 {
   caml_dlclose(Handle_val(handle));
   return Val_unit;
 }
 
 /*#include <stdio.h>*/
-CAMLprim value caml_dynlink_lookup_symbol(value handle, value symbolname)
+CAMLprim value caml_dynlink_lookup_symbol(cdst cds, value handle, value symbolname)
 {
   void * symb;
   value result;
@@ -234,7 +234,7 @@ CAMLprim value caml_dynlink_lookup_symbol(value handle, value symbolname)
   /* printf("%s = 0x%lx\n", String_val(symbolname), symb);
      fflush(stdout); */
   if (symb == NULL) return Val_unit /*caml_failwith(caml_dlerror())*/;
-  result = caml_alloc_small(1, Abstract_tag);
+  result = caml_alloc_small(cds, 1, Abstract_tag);
   Handle_val(result) = symb;
   return result;
 }
@@ -246,15 +246,15 @@ CAMLprim value caml_dynlink_add_primitive(value handle)
   return Val_int(caml_ext_table_add(&caml_prim_table, Handle_val(handle)));
 }
 
-CAMLprim value caml_dynlink_get_current_libs(value unit)
+CAMLprim value caml_dynlink_get_current_libs(cdst cds, value unit)
 {
   CAMLparam0();
   CAMLlocal1(res);
   int i;
 
-  res = caml_alloc_tuple(shared_libs.size);
+  res = caml_alloc_tuple(cds, shared_libs.size);
   for (i = 0; i < shared_libs.size; i++) {
-    value v = caml_alloc_small(1, Abstract_tag);
+    value v = caml_alloc_small(cds, 1, Abstract_tag);
     Handle_val(v) = shared_libs.contents[i];
     Store_field(res, i, v);
   }

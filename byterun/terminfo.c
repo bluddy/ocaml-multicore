@@ -40,7 +40,7 @@ static char *down = NULL;
 static char *standout = NULL;
 static char *standend = NULL;
 
-CAMLprim value caml_terminfo_setup (value vchan)
+CAMLprim value caml_terminfo_setup (cdst cds, value vchan)
 {
   value result;
   static char buffer[1024];
@@ -66,7 +66,7 @@ CAMLprim value caml_terminfo_setup (value vchan)
       || standout == NULL || standend == NULL){
     return Bad_term;
   }
-  result = caml_alloc_small (1, Good_term_tag);
+  result = caml_alloc_small (cds, 1, Good_term_tag);
   Init_field (result, 0, Val_int (num_lines));
   return result;
 }

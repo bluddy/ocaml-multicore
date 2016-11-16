@@ -49,30 +49,30 @@ static void compare_free_stack(void)
 }
 
 /* Same, then raise Out_of_memory */
-static void compare_stack_overflow(void)
+static void compare_stack_overflow(cdst cds)
 {
   caml_gc_log ("Stack overflow in structural comparison");
   compare_free_stack();
-  caml_raise_out_of_memory();
+  caml_raise_out_of_memory(cds);
 }
 
 /* Grow the compare stack */
-static struct compare_item * compare_resize_stack(struct compare_item * sp)
+static struct compare_item * compare_resize_stack(cdst cds, struct compare_item * sp)
 {
   asize_t newsize = 2 * (compare_stack_limit - compare_stack);
   asize_t sp_offset = sp - compare_stack;
   struct compare_item * newstack;
 
-  if (newsize >= COMPARE_STACK_MAX_SIZE) compare_stack_overflow();
+  if (newsize >= COMPARE_STACK_MAX_SIZE) compare_stack_overflow(cds);
   if (compare_stack == compare_stack_init) {
     newstack = malloc(sizeof(struct compare_item) * newsize);
-    if (newstack == NULL) compare_stack_overflow();
+    if (newstack == NULL) compare_stack_overflow(cds);
     memcpy(newstack, compare_stack_init,
            sizeof(struct compare_item) * COMPARE_STACK_INIT_SIZE);
   } else {
     newstack =
       realloc(compare_stack, sizeof(struct compare_item) * newsize);
-    if (newstack == NULL) compare_stack_overflow();
+    if (newstack == NULL) compare_stack_overflow(cds);
   }
   compare_stack = newstack;
   compare_stack_limit = newstack + newsize;
@@ -92,7 +92,7 @@ static struct compare_item * compare_resize_stack(struct compare_item * sp)
       < 0 and > UNORDERED v1 is less than v2
       UNORDERED           v1 and v2 cannot be compared */
 
-static intnat compare_val(value v1, value v2, int total)
+static intnat compare_val(cdst cds, value v1, value v2, int total)
 {
   struct compare_item * sp;
   tag_t t1, t2;
@@ -238,7 +238,7 @@ static intnat compare_val(value v1, value v2, int total)
       /* Remember that we still have to compare fields 1 ... sz - 1 */
       if (sz1 > 1) {
         sp++;
-        if (sp >= compare_stack_limit) sp = compare_resize_stack(sp);
+        if (sp >= compare_stack_limit) sp = compare_resize_stack(cds, sp);
         sp->v1 = Op_val(v1) + 1;
         sp->v2 = Op_val(v2) + 1;
         sp->count = sz1 - 1;
@@ -258,9 +258,9 @@ static intnat compare_val(value v1, value v2, int total)
   }
 }
 
-CAMLprim value caml_compare(value v1, value v2)
+CAMLprim value caml_compare(cdst cds, value v1, value v2)
 {
-  intnat res = compare_val(v1, v2, 1);
+  intnat res = compare_val(cds, v1, v2, 1);
   /* Free stack if needed */
   if (compare_stack != compare_stack_init) compare_free_stack();
   if (res < 0)
@@ -271,44 +271,44 @@ CAMLprim value caml_compare(value v1, value v2)
     return Val_int(EQUAL);
 }
 
-CAMLprim value caml_equal(value v1, value v2)
+CAMLprim value caml_equal(cdst cds, value v1, value v2)
 {
-  intnat res = compare_val(v1, v2, 0);
+  intnat res = compare_val(cds, v1, v2, 0);
   if (compare_stack != compare_stack_init) compare_free_stack();
   return Val_int(res == 0);
 }
 
-CAMLprim value caml_notequal(value v1, value v2)
+CAMLprim value caml_notequal(cdst cds, value v1, value v2)
 {
-  intnat res = compare_val(v1, v2, 0);
+  intnat res = compare_val(cds, v1, v2, 0);
   if (compare_stack != compare_stack_init) compare_free_stack();
   return Val_int(res != 0);
 }
 
-CAMLprim value caml_lessthan(value v1, value v2)
+CAMLprim value caml_lessthan(cdst cds, value v1, value v2)
 {
-  intnat res = compare_val(v1, v2, 0);
+  intnat res = compare_val(cds, v1, v2, 0);
   if (compare_stack != compare_stack_init) compare_free_stack();
   return Val_int(res < 0 && res != UNORDERED);
 }
 
-CAMLprim value caml_lessequal(value v1, value v2)
+CAMLprim value caml_lessequal(cdst cds, value v1, value v2)
 {
-  intnat res = compare_val(v1, v2, 0);
+  intnat res = compare_val(cds, v1, v2, 0);
   if (compare_stack != compare_stack_init) compare_free_stack();
   return Val_int(res <= 0 && res != UNORDERED);
 }
 
-CAMLprim value caml_greaterthan(value v1, value v2)
+CAMLprim value caml_greaterthan(cdst cds, value v1, value v2)
 {
-  intnat res = compare_val(v1, v2, 0);
+  intnat res = compare_val(cds, v1, v2, 0);
   if (compare_stack != compare_stack_init) compare_free_stack();
   return Val_int(res > 0);
 }
 
-CAMLprim value caml_greaterequal(value v1, value v2)
+CAMLprim value caml_greaterequal(cdst cds, value v1, value v2)
 {
-  intnat res = compare_val(v1, v2, 0);
+  intnat res = compare_val(cds, v1, v2, 0);
   if (compare_stack != compare_stack_init) compare_free_stack();
   return Val_int(res >= 0);
 }

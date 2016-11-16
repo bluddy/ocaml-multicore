@@ -22,13 +22,13 @@
 
 struct custom_operations {
   char *identifier;
-  void (*finalize)(value v);
+  void (*finalize)(cdst, value v);
   int (*compare)(value v1, value v2);
   intnat (*hash)(value v);
   void (*serialize)(value v,
                     /*out*/ uintnat * wsize_32 /*size in bytes*/,
                     /*out*/ uintnat * wsize_64 /*size in bytes*/);
-  value (*deserialize)(void);
+  value (*deserialize)(cdst);
   int (*compare_ext)(value v1, value v2);
 };
 
@@ -46,7 +46,7 @@ extern "C" {
 #endif
 
 
-CAMLextern value caml_alloc_custom(const struct custom_operations * ops,
+CAMLextern value caml_alloc_custom(cdst, const struct custom_operations * ops,
                                    uintnat size, /*size in bytes*/
                                    mlsize_t mem, /*resources consumed*/
                                    mlsize_t max  /*max resources*/);
@@ -59,7 +59,7 @@ CAMLextern void caml_register_custom_operations(const struct custom_operations *
 /* <private> */
 extern struct custom_operations * caml_find_custom_operations(char * ident);
 extern struct custom_operations *
-          caml_final_custom_operations(void (*fn)(value));
+          caml_final_custom_operations(void (*fn)(cdst, value));
 
 extern void caml_init_custom_operations(void);
 /* </private> */

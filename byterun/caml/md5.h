@@ -20,8 +20,8 @@
 #include "mlvalues.h"
 #include "io.h"
 
-CAMLextern value caml_md5_string (value str, value ofs, value len);
-CAMLextern value caml_md5_chan (value vchan, value len);
+CAMLextern value caml_md5_string (cdst, value str, value ofs, value len);
+CAMLextern value caml_md5_chan (cdst, value vchan, value len);
 CAMLextern void caml_md5_block(unsigned char digest[16],
                                void * data, uintnat len);
 

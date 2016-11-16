@@ -23,14 +23,17 @@ struct caml_domain_state {
 #endif
 #undef DOMAIN_STATE
 };
+typedef struct caml_domain_state* cdst;
 
 #ifdef __APPLE__
   CAMLextern pthread_key_t caml_domain_state_key;
   #define CAML_INIT_DOMAIN_STATE (pthread_key_create(&caml_domain_state_key, NULL))
-  #define CAML_DOMAIN_STATE \
+  #define CAML_TL_DOMAIN_STATE \
       ((struct caml_domain_state*) pthread_getspecific(caml_domain_state_key))
-  #define SET_CAML_DOMAIN_STATE(x) \
+  #define SET_CAML_TL_DOMAIN_STATE(x) \
       (pthread_setspecific(caml_domain_state_key, x))
+    #define CAML_DOMAIN_STATE cds
+    #define SET_CAML_DOMAIN_STATE(x) (cds = x)
 #else
   CAMLextern __thread struct caml_domain_state* caml_domain_state;
   #define CAML_INIT_DOMAIN_STATE

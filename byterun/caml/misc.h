@@ -86,6 +86,7 @@ CAMLextern int caml_failed_assert (char *, char *, int);
 #define CAML_STATIC_ASSERT_2(b, l) CAML_STATIC_ASSERT_3(b, l)
 #define CAML_STATIC_ASSERT(b) CAML_STATIC_ASSERT_2(b, __LINE__)
 
+typedef struct caml_domain_state* cdst;
 
 /* <private> */
 

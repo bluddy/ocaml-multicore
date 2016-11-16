@@ -19,7 +19,8 @@
 #include "caml/memory.h"
 #include "caml/mlvalues.h"
 
-CAMLexport value caml_alloc_custom(const struct custom_operations * ops,
+CAMLexport value caml_alloc_custom(cdst cds,
+                                   const struct custom_operations * ops,
                                    uintnat size,
                                    mlsize_t mem,
                                    mlsize_t max)
@@ -29,13 +30,13 @@ CAMLexport value caml_alloc_custom(const struct custom_operations * ops,
 
   wosize = 1 + (size + sizeof(value) - 1) / sizeof(value);
   if (ops->finalize == NULL && wosize <= Max_young_wosize) {
-    result = caml_alloc_small(wosize, Custom_tag);
+    result = caml_alloc_small(cds, wosize, Custom_tag);
     Custom_ops_val(result) = ops;
   } else {
-    result = caml_alloc_shr(wosize, Custom_tag);
+    result = caml_alloc_shr(cds, wosize, Custom_tag);
     Custom_ops_val(result) = ops;
     /* !! caml_adjust_gc_speed(mem, max); */
-    result = caml_check_urgent_gc(result);
+    result = caml_check_urgent_gc(cds, result);
   }
   return result;
 }

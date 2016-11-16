@@ -38,8 +38,8 @@ CAMLexport intnat volatile caml_pending_signals[NSIG];
 
 /* Execute all pending signals */
 
-static void caml_execute_signal(int signal_number);
-void caml_process_pending_signals(void)
+static void caml_execute_signal(cdst, int signal_number);
+void caml_process_pending_signals(cdst cds)
 {
   int i;
   /* this function preserves errno (PR#5982) */
@@ -50,7 +50,7 @@ void caml_process_pending_signals(void)
     for (i = 0; i < NSIG; i++) {
       if (caml_pending_signals[i]) {
         caml_pending_signals[i] = 0;
-        caml_execute_signal(i);
+        caml_execute_signal(cds, i);
       }
     }
   }
@@ -75,11 +75,11 @@ void caml_record_signal(int signal_number)
 
 static caml_root caml_signal_handlers;
 
-void caml_init_signal_handling() {
-  caml_signal_handlers = caml_create_root(caml_alloc(NSIG, 0));
+void caml_init_signal_handling(cdst cds) {
+  caml_signal_handlers = caml_create_root(cds, caml_alloc(cds, NSIG, 0));
 }
 
-static void caml_execute_signal(int signal_number)
+static void caml_execute_signal(cdst cds, int signal_number)
 {
   value res;
 #ifdef POSIX_SIGNALS
@@ -90,14 +90,14 @@ static void caml_execute_signal(int signal_number)
   sigaddset(&sigs, signal_number);
   sigprocmask(SIG_BLOCK, &sigs, &sigs);
 #endif
-  res = caml_callback_exn(
-           Field(caml_read_root(caml_signal_handlers), signal_number),
+  res = caml_callback_exn(cds,
+           Field(caml_read_root(cds, caml_signal_handlers), signal_number),
            Val_int(caml_rev_convert_signal_number(signal_number)));
 #ifdef POSIX_SIGNALS
   /* Restore the original signal mask */
   sigprocmask(SIG_SETMASK, &sigs, NULL);
 #endif
-  if (Is_exception_result(res)) caml_raise(Extract_exception(res));
+  if (Is_exception_result(res)) caml_raise(cds, Extract_exception(res));
 }
 
 /* OS-independent numbering of signals */
@@ -190,7 +190,7 @@ CAMLexport int caml_rev_convert_signal_number(int signo)
 
 /* Installation of a signal handler (as per [Sys.signal]) */
 
-CAMLprim value caml_install_signal_handler(value signal_number, value action)
+CAMLprim value caml_install_signal_handler(cdst cds, value signal_number, value action)
 {
   CAMLparam2 (signal_number, action);
   CAMLlocal1 (res);
@@ -219,15 +219,15 @@ CAMLprim value caml_install_signal_handler(value signal_number, value action)
     res = Val_int(1);
     break;
   case 2:                       /* was Signal_handle */
-    res = caml_alloc_small (1, 0);
-    Init_field(res, 0, Field(caml_read_root(caml_signal_handlers), sig));
+    res = caml_alloc_small (cds, 1, 0);
+    Init_field(res, 0, Field(caml_read_root(cds, caml_signal_handlers), sig));
     break;
   default:                      /* error in caml_set_signal_action */
     caml_sys_error(NO_ARG);
   }
   if (Is_block(action)) {
-    caml_modify_field(caml_read_root(caml_signal_handlers), sig, Field(action, 0));
+    caml_modify_field(cds, caml_read_root(cds, caml_signal_handlers), sig, Field(action, 0));
   }
-  caml_process_pending_signals();
+  caml_process_pending_signals(cds);
   CAMLreturn (res);
 }

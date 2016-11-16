@@ -42,7 +42,7 @@ static intnat caml_globals_scanned = 0;
 
 CAMLexport void (*caml_scan_roots_hook)(scanning_action, struct domain*) = NULL;
 
-CAMLexport void caml_do_local_roots (scanning_action f, struct domain* domain)
+CAMLexport void caml_do_local_roots (cdst cds, scanning_action f, struct domain* domain)
 {
   struct caml__roots_block *lr;
   int i, j;
@@ -62,13 +62,13 @@ CAMLexport void caml_do_local_roots (scanning_action f, struct domain* domain)
   }
 #endif
 
-  f(domain->state->current_stack, &(domain->state->current_stack));
+  f(cds, domain->state->current_stack, &(domain->state->current_stack));
   for (lr = domain->state->local_roots; lr != NULL; lr = lr->next) {
     for (i = 0; i < lr->ntables; i++){
       for (j = 0; j < lr->nitems; j++){
         sp = &(lr->tables[i][j]);
         if (*sp != 0) {
-          f (*sp, sp);
+          f (cds, *sp, sp);
         }
       }
     }
@@ -77,7 +77,7 @@ CAMLexport void caml_do_local_roots (scanning_action f, struct domain* domain)
   if (caml_scan_roots_hook != NULL) (*caml_scan_roots_hook)(f, domain);
 }
 
-void caml_do_sampled_roots(scanning_action f, struct domain* domain)
+void caml_do_sampled_roots(cdst cds, scanning_action f, struct domain* domain)
 {
   /* look for roots on the minor heap */
   value* p = (value*)(domain->state->young_ptr);
@@ -86,12 +86,12 @@ void caml_do_sampled_roots(scanning_action f, struct domain* domain)
     value v = Val_hp(p);
     Assert (Is_block(v) && Wosize_val(v) <= Max_young_wosize);
     if (Tag_val(v) == Stack_tag) {
-      caml_scan_stack(f, v);
+      caml_scan_stack(cds, f, v);
     } else if (Tag_val(v) < No_scan_tag) {
       int i;
       value* fields = Op_val(v);
       for (i = 0; i < Wosize_val(v); i++) {
-        if (Is_block(fields[i]) && !Is_minor(fields[i])) f(fields[i], &fields[i]);
+        if (Is_block(fields[i]) && !Is_minor(fields[i])) f(cds, fields[i], &fields[i]);
       }
     }
     p += Whsize_wosize(Wosize_val(v));
@@ -104,15 +104,15 @@ void caml_do_sampled_roots(scanning_action f, struct domain* domain)
   for (p = mark_stack; p < mark_stack_end; p++) {
     value v = *p;
     Assert (Is_block(v));
-    f(v, p);
+    f(cds, v, p);
     if (Tag_val(v) == Stack_tag) {
-      caml_scan_stack(f, v);
+      caml_scan_stack(cds, f, v);
     } else if (Tag_val(v) < No_scan_tag) {
       int i;
       value* fields = Op_val(v);
       Assert(Tag_val(v) != Infix_tag); /* Infix_tag can't appear on mark stack */
       for (i = 0; i < Wosize_val(v); i++) {
-        if (Is_block(fields[i]) && !Is_minor(fields[i])) f(fields[i], &fields[i]);
+        if (Is_block(fields[i]) && !Is_minor(fields[i])) f(cds, fields[i], &fields[i]);
       }
     }
   }
@@ -122,14 +122,14 @@ void caml_do_sampled_roots(scanning_action f, struct domain* domain)
   /* treat the remembered sets as roots */
   struct caml_ref_entry* r;
   for (r = domain->state->remembered_set->ref.base; r < domain->state->remembered_set->ref.ptr; r++) {
-    f(r->obj, 0);
+    f(cds, r->obj, 0);
   }
   for (r = domain->state->remembered_set->fiber_ref.base; r < domain->state->remembered_set->fiber_ref.ptr; r++) {
-    f(r->obj, 0);
-    caml_scan_stack(f, r->obj);
+    f(cds, r->obj, 0);
+    caml_scan_stack(cds, f, r->obj);
   }
 
 
   /* look for local C and stack roots */
-  caml_do_local_roots(f, domain);
+  caml_do_local_roots(cds, f, domain);
 }

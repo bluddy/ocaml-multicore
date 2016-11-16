@@ -36,16 +36,16 @@ extern "C" {
 #define BVAR_EMPTY      0x10000
 #define BVAR_OWNER_MASK 0x0ffff
 
-CAMLextern value caml_alloc_shr (mlsize_t, tag_t);
+CAMLextern value caml_alloc_shr (cdst, mlsize_t, tag_t);
 CAMLextern void caml_adjust_gc_speed (mlsize_t, mlsize_t);
 CAMLextern void caml_alloc_dependent_memory (mlsize_t);
 CAMLextern void caml_free_dependent_memory (mlsize_t);
-CAMLextern void caml_modify_field (value, int, value);
-CAMLextern int caml_atomic_cas_field (value, int, value, value);
-CAMLextern value caml_read_barrier (value, int);
-CAMLextern void caml_initialize_field (value, int, value);
-CAMLextern void caml_blit_fields (value src, int srcoff, value dst, int dstoff, int n);
-CAMLextern value caml_check_urgent_gc (value);
+CAMLextern void caml_modify_field (cdst, value, int, value);
+CAMLextern int caml_atomic_cas_field (cdst, value, int, value, value);
+CAMLextern value caml_read_barrier (cdst, value, int);
+CAMLextern void caml_initialize_field (cdst, value, int, value);
+CAMLextern void caml_blit_fields (cdst, value src, int srcoff, value dst, int dstoff, int n);
+CAMLextern value caml_check_urgent_gc (cdst, value);
 CAMLextern void * caml_stat_alloc (asize_t);              /* Size in bytes. */
 CAMLextern void caml_stat_free (void *);
 CAMLextern void * caml_stat_resize (void *, asize_t);     /* Size in bytes. */
@@ -86,7 +86,7 @@ color_t caml_allocation_color (void *hp);
   if (Caml_check_gc_interrupt()){                                           \
     CAML_DOMAIN_STATE->young_ptr += Bhsize_wosize (wosize);                 \
     Setup_for_gc;                                                           \
-    caml_handle_gc_interrupt ();                                            \
+    caml_handle_gc_interrupt (cds);                                            \
     Restore_after_gc;                                                       \
     CAML_DOMAIN_STATE->young_ptr -= Bhsize_wosize (wosize);                 \
   }                                                                         \
@@ -306,7 +306,7 @@ struct caml__roots_block {
 #define CAMLnoreturn ((void) caml__frame)
 
   /* modify a field */
-#define Store_field(block, offset, val) caml_modify_field(block, offset, val)
+#define Store_field(block, offset, val) caml_modify_field(cds, block, offset, val)
 
 /*
    NOTE: [Begin_roots] and [End_roots] are superseded by [CAMLparam]*,
@@ -394,24 +394,24 @@ struct caml__roots_block {
    value.  The value stored in this root may only be read and written
    with [caml_read_root] and [caml_modify_root]. */
 
-CAMLextern caml_root caml_create_root (value);
+CAMLextern caml_root caml_create_root (cdst, value);
 
 /* [caml_delete_root] deletes a root created by caml_create_root */
 
-CAMLextern void caml_delete_root (caml_root);
+CAMLextern void caml_delete_root (cdst, caml_root);
 
 /* [caml_read_root] loads the value stored in a root */
 
-CAMLextern value caml_read_root (caml_root);
+CAMLextern value caml_read_root (cdst, caml_root);
 
 /* [caml_modify_root] stores a new value in a root */
 
-CAMLextern void caml_modify_root (caml_root, value);
+CAMLextern void caml_modify_root (cdst, caml_root, value);
 
 /* BVars */
 
-CAMLprim value caml_bvar_create(value);
-intnat caml_bvar_status(value);
+CAMLprim value caml_bvar_create(cdst, value);
+intnat caml_bvar_status(cdst, value);
 
 #ifdef __cplusplus
 }

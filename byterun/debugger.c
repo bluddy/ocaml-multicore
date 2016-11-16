@@ -32,11 +32,11 @@ caml_root marshal_flags;
 
 #if !defined(HAS_SOCKETS) || defined(NATIVE_CODE)
 
-void caml_debugger_init(void)
+void caml_debugger_init(cdst cds)
 {
 }
 
-void caml_debugger(enum event_kind event)
+void caml_debugger(cdst cds, enum event_kind event)
 {
 }
 
@@ -156,7 +156,7 @@ static void winsock_cleanup(void)
 }
 #endif
 
-void caml_debugger_init(void)
+void caml_debugger_init(cdst cds)
 {
   char * address;
   char * port, * p;
@@ -164,10 +164,10 @@ void caml_debugger_init(void)
   value flags;
   int n;
 
-  flags = caml_alloc(2, Tag_cons);
+  flags = caml_alloc(cds, 2, Tag_cons);
   Store_field(flags, 0, Val_int(1)); /* Marshal.Closures */
   Store_field(flags, 1, Val_emptylist);
-  marshal_flags = caml_create_root(flags);
+  marshal_flags = caml_create_root(cds, flags);
 
   address = getenv("CAML_DEBUG_SOCKET");
   if (address == NULL) return;
@@ -229,7 +229,7 @@ static void putval(struct channel *chan, value val)
   caml_really_putblock(chan, (char *) &val, sizeof(val));
 }
 
-static void safe_output_value(struct channel *chan, value val)
+static void safe_output_value(cdst cds, struct channel *chan, value val)
 {
   struct longjmp_buffer raise_buf;
   struct caml_exception_context exception_ctx = {&raise_buf, CAML_LOCAL_ROOTS};
@@ -239,7 +239,7 @@ static void safe_output_value(struct channel *chan, value val)
   saved_external_raise = CAML_DOMAIN_STATE->external_raise;
   if (sigsetjmp(raise_buf.buf, 0) == 0) {
     CAML_DOMAIN_STATE->external_raise = &exception_ctx;
-    caml_output_val(chan, val, caml_read_root(marshal_flags));
+    caml_output_val(chan, val, caml_read_root(cds, marshal_flags));
   } else {
     /* Send wrong magic number, will cause [caml_input_value] to fail */
     caml_really_putblock(chan, "\000\000\000\000", 4);
@@ -252,7 +252,7 @@ static void safe_output_value(struct channel *chan, value val)
 #define Extra_args(sp) (Long_val(((sp)[2])))
 #define Locals(sp) ((sp) + 3)
 
-void caml_debugger(enum event_kind event)
+void caml_debugger(cdst cds, enum event_kind event)
 {
   value * frame;
   intnat i, pos;
@@ -390,7 +390,7 @@ void caml_debugger(enum event_kind event)
       break;
     case REQ_GET_GLOBAL:
       i = caml_getword(dbg_in);
-      putval(dbg_out, Field(caml_read_root(caml_global_data), i));
+      putval(dbg_out, Field(caml_read_root(cds, caml_global_data), i));
       caml_flush(dbg_out);
       break;
     case REQ_GET_ACCU:
@@ -417,7 +417,7 @@ void caml_debugger(enum event_kind event)
       break;
     case REQ_MARSHAL_OBJ:
       val = getval(dbg_in);
-      safe_output_value(dbg_out, val);
+      safe_output_value(cds, dbg_out, val);
       caml_flush(dbg_out);
       break;
     case REQ_GET_CLOSURE_CODE:

@@ -418,37 +418,37 @@ CAMLprim value caml_gc_set(value v)
 #endif
 }
 
-CAMLprim value caml_gc_minor(value v)
+CAMLprim value caml_gc_minor(cdst cds, value v)
 {                                                    Assert (v == Val_unit);
-  caml_minor_collection ();
+  caml_minor_collection (cds);
   return Val_unit;
 }
 
-CAMLprim value caml_gc_major(value v)
+CAMLprim value caml_gc_major(cdst cds, value v)
 {                                                    Assert (v == Val_unit);
   caml_gc_log ("Major GC cycle requested");
-  caml_empty_minor_heap ();
+  caml_empty_minor_heap (cds);
   caml_trigger_stw_gc ();
-  caml_handle_gc_interrupt ();
+  caml_handle_gc_interrupt (cds);
   /* !! caml_final_do_calls (); */
   return Val_unit;
 }
 
-CAMLprim value caml_gc_full_major(value v)
+CAMLprim value caml_gc_full_major(cdst cds, value v)
 {
-  return caml_gc_major(v);
+  return caml_gc_major(cds, v);
 }
 
-CAMLprim value caml_gc_major_slice (value v)
+CAMLprim value caml_gc_major_slice (cdst cds, value v)
 {
   Assert (Is_long (v));
-  caml_empty_minor_heap ();
-  return Val_long (caml_major_collection_slice (Long_val (v)));
+  caml_empty_minor_heap (cds);
+  return Val_long (caml_major_collection_slice (cds, Long_val (v)));
 }
 
-CAMLprim value caml_gc_compaction(value v)
+CAMLprim value caml_gc_compaction(cdst cds, value v)
 {
-  return caml_gc_major(v);
+  return caml_gc_major(cds, v);
 }
 
 uintnat caml_normalize_heap_increment (uintnat i)
@@ -459,10 +459,10 @@ uintnat caml_normalize_heap_increment (uintnat i)
   return ((i + Page_size - 1) >> Page_log) << Page_log;
 }
 
-void caml_init_gc ()
+cdst caml_init_gc ()
 {
-  uintnat
-major_heap_size =
+  cdst cds;
+  uintnat major_heap_size =
     Bsize_wsize (caml_normalize_heap_increment (caml_startup_params.heap_size_init));
 
   caml_max_stack_size = caml_startup_params.max_stack_init;
@@ -471,10 +471,12 @@ major_heap_size =
   caml_gc_log ("Initial stack limit: %luk bytes",
                caml_max_stack_size / 1024 * sizeof (value));
 
-  caml_init_domains(caml_startup_params.minor_heap_init);
+  cds = caml_init_domains(caml_startup_params.minor_heap_init);
   #ifdef NATIVE_CODE
   caml_init_frame_descriptors();
   #endif
+
+  return cds;
 /*
   caml_major_heap_increment = major_incr;
   caml_percent_free = norm_pfree (percent_fr);

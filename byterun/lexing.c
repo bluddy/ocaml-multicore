@@ -116,7 +116,7 @@ CAMLprim value caml_lex_engine(struct lexing_table *tbl, value start_state,
 /* New lexer engine, with memory of positions  */
 /***********************************************/
 
-static void run_mem(char *pc, value mem, value curr_pos) {
+static void run_mem(cdst cds, char *pc, value mem, value curr_pos) {
   for (;;) {
     unsigned char dst, src ;
 
@@ -134,7 +134,7 @@ static void run_mem(char *pc, value mem, value curr_pos) {
   }
 }
 
-static void run_tag(char *pc, value mem) {
+static void run_tag(cdst cds, char *pc, value mem) {
   for (;;) {
     unsigned char dst, src ;
 
@@ -152,7 +152,8 @@ static void run_tag(char *pc, value mem) {
   }
 }
 
-CAMLprim value caml_new_lex_engine(struct lexing_table *tbl, value start_state,
+CAMLprim value caml_new_lex_engine(cdst cds,
+                                   struct lexing_table *tbl, value start_state,
                                    struct lexer_buffer *lexbuf)
 {
   int state, base, backtrk, c, pstate ;
@@ -170,7 +171,7 @@ CAMLprim value caml_new_lex_engine(struct lexing_table *tbl, value start_state,
     base = Short(tbl->lex_base, state);
     if (base < 0) {
       int pc_off = Short(tbl->lex_base_code, state) ;
-      run_tag(Bp_val(tbl->lex_code) + pc_off, lexbuf->lex_mem);
+      run_tag(cds, Bp_val(tbl->lex_code) + pc_off, lexbuf->lex_mem);
       /*      fprintf(stderr,"Perform: %d\n",-base-1) ; */
       return Val_int(-base-1);
     }
@@ -178,7 +179,7 @@ CAMLprim value caml_new_lex_engine(struct lexing_table *tbl, value start_state,
     backtrk = Short(tbl->lex_backtrk, state);
     if (backtrk >= 0) {
       int pc_off =  Short(tbl->lex_backtrk_code, state);
-      run_tag(Bp_val(tbl->lex_code) + pc_off, lexbuf->lex_mem);
+      run_tag(cds, Bp_val(tbl->lex_code) + pc_off, lexbuf->lex_mem);
       lexbuf->lex_last_pos = lexbuf->lex_curr_pos;
       lexbuf->lex_last_action = Val_int(backtrk);
 
@@ -218,7 +219,7 @@ CAMLprim value caml_new_lex_engine(struct lexing_table *tbl, value start_state,
       else
         pc_off = Short(tbl->lex_default_code, pstate) ;
       if (pc_off > 0)
-        run_mem(Bp_val(tbl->lex_code) + pc_off, lexbuf->lex_mem,
+        run_mem(cds, Bp_val(tbl->lex_code) + pc_off, lexbuf->lex_mem,
                 lexbuf->lex_curr_pos) ;
       /* Erase the EOF condition only if the EOF pseudo-character was
          consumed by the automaton (i.e. there was no backtrack above)

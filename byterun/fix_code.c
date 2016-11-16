@@ -47,7 +47,7 @@ void caml_init_code_fragments() {
   caml_ext_table_add(&caml_code_fragments_table, cf);
 }
 
-void caml_load_code(int fd, asize_t len)
+void caml_load_code(cdst cds, int fd, asize_t len)
 {
   int i;
 

@@ -78,7 +78,7 @@ struct caml_heap_state {
   uintnat pools_allocated, large_bytes_allocated;
 };
 
-struct caml_heap_state* caml_init_shared_heap() {
+struct caml_heap_state* caml_init_shared_heap(cdst cds) {
   int i;
   struct caml_heap_state* heap;
   if (caml_domain_self()->is_main) {
@@ -218,9 +218,9 @@ static void* pool_allocate(struct caml_heap_state* local, sizeclass sz) {
   return p;
 }
 
-static void* large_allocate(struct caml_heap_state* local, mlsize_t sz) {
+static void* large_allocate(cdst cds, struct caml_heap_state* local, mlsize_t sz) {
   large_alloc* a = malloc(sz + LARGE_ALLOC_HEADER_SZ);
-  if (!a) caml_raise_out_of_memory();
+  if (!a) caml_raise_out_of_memory(cds);
   a->owner = local->owner;
   a->next = local->swept_large;
   local->swept_large = a;
@@ -228,7 +228,7 @@ static void* large_allocate(struct caml_heap_state* local, mlsize_t sz) {
   return (char*)a + LARGE_ALLOC_HEADER_SZ;
 }
 
-value* caml_shared_try_alloc(struct caml_heap_state* local, mlsize_t wosize, tag_t tag, int pinned) {
+value* caml_shared_try_alloc(cdst cds, struct caml_heap_state* local, mlsize_t wosize, tag_t tag, int pinned) {
   mlsize_t whsize = Whsize_wosize(wosize);
   value* p;
   Assert (wosize > 0);
@@ -236,7 +236,7 @@ value* caml_shared_try_alloc(struct caml_heap_state* local, mlsize_t wosize, tag
   if (whsize <= SIZECLASS_MAX) {
     p = pool_allocate(local, sizeclass_wsize[whsize]);
   } else {
-    p = large_allocate(local, Bsize_wsize(whsize));
+    p = large_allocate(cds, local, Bsize_wsize(whsize));
   }
   if (!p) return 0;
   Hd_hp (p) = Make_header(wosize, tag, pinned ? NOT_MARKABLE : global.UNMARKED);
@@ -429,7 +429,7 @@ static __thread int verify_sp;
 static __thread intnat verify_objs = 0;
 static __thread struct addrmap verify_seen = ADDRMAP_INIT;
 
-static void verify_push(value v, value* p) {
+static void verify_push(cdst cds, value v, value* p) {
   if (verify_sp == verify_stack_len) {
     verify_stack_len = verify_stack_len * 2 + 100;
     verify_stack = caml_stat_resize(verify_stack,
@@ -438,7 +438,7 @@ static void verify_push(value v, value* p) {
   verify_stack[verify_sp++] = v;
 }
 
-static void verify_object(value v) {
+static void verify_object(cdst cds, value v) {
   if (!Is_block(v)) return;
 
   if (Tag_val(v) == Infix_tag) {
@@ -458,7 +458,7 @@ static void verify_object(value v) {
   }
 
   if (Tag_val(v) == Stack_tag) {
-    caml_scan_stack(verify_push, v);
+    caml_scan_stack(cds, verify_push, v);
   } else if (Tag_val(v) < No_scan_tag) {
     int i;
     for (i = 0; i < Wosize_val(v); i++) {
@@ -467,17 +467,17 @@ static void verify_object(value v) {
         Assert(caml_owner_of_young_block(v) ==
                caml_owner_of_young_block(f));
       }
-      if (Is_block(f)) verify_push(f, 0);
+      if (Is_block(f)) verify_push(cds, f, 0);
     }
   }
 }
 
-static void verify_heap() {
+static void verify_heap(cdst cds) {
   caml_save_stack_gc();
 
-  caml_do_local_roots(&verify_push, caml_domain_self());
-  caml_scan_global_roots(&verify_push);
-  while (verify_sp) verify_object(verify_stack[--verify_sp]);
+  caml_do_local_roots(cds, &verify_push, caml_domain_self());
+  caml_scan_global_roots(cds, &verify_push);
+  while (verify_sp) verify_object(cds, verify_stack[--verify_sp]);
   caml_gc_log("Verify: %lu objs", verify_objs);
 
   caml_addrmap_clear(&verify_seen);
@@ -486,7 +486,7 @@ static void verify_heap() {
   verify_stack = 0;
   verify_stack_len = 0;
   verify_sp = 0;
-  caml_restore_stack_gc();
+  caml_restore_stack_gc(cds);
 }
 
 struct mem_stats {

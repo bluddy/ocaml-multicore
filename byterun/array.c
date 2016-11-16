@@ -33,21 +33,21 @@ CAMLexport int caml_is_double_array(value array)
   return (Tag_val(array) == Double_array_tag);
 }
 
-CAMLprim value caml_array_get_addr(value array, value index)
+CAMLprim value caml_array_get_addr(cdst cds, value array, value index)
 {
   intnat idx = Long_val(index);
-  if (idx < 0 || idx >= Wosize_val(array)) caml_array_bound_error();
+  if (idx < 0 || idx >= Wosize_val(array)) caml_array_bound_error(cds);
   return Field(array, idx);
 }
 
-CAMLprim value caml_array_get_float(value array, value index)
+CAMLprim value caml_array_get_float(cdst cds, value array, value index)
 {
   intnat idx = Long_val(index);
   double d;
   value res;
 
   if (idx < 0 || idx >= Wosize_val(array) / Double_wosize)
-    caml_array_bound_error();
+    caml_array_bound_error(cds);
   d = Double_field(array, idx);
 #define Setup_for_gc
 #define Restore_after_gc
@@ -58,40 +58,40 @@ CAMLprim value caml_array_get_float(value array, value index)
   return res;
 }
 
-CAMLprim value caml_array_get(value array, value index)
+CAMLprim value caml_array_get(cdst cds, value array, value index)
 {
   if (Tag_val(array) == Double_array_tag)
-    return caml_array_get_float(array, index);
+    return caml_array_get_float(cds, array, index);
   else
-    return caml_array_get_addr(array, index);
+    return caml_array_get_addr(cds, array, index);
 }
 
-CAMLprim value caml_array_set_addr(value array, value index, value newval)
+CAMLprim value caml_array_set_addr(cdst cds, value array, value index, value newval)
 {
   intnat idx = Long_val(index);
-  if (idx < 0 || idx >= Wosize_val(array)) caml_array_bound_error();
-  caml_modify_field(array, idx, newval);
+  if (idx < 0 || idx >= Wosize_val(array)) caml_array_bound_error(cds);
+  caml_modify_field(cds, array, idx, newval);
   return Val_unit;
 }
 
-CAMLprim value caml_array_set_float(value array, value index, value newval)
+CAMLprim value caml_array_set_float(cdst cds, value array, value index, value newval)
 {
   intnat idx = Long_val(index);
   if (idx < 0 || idx >= Wosize_val(array) / Double_wosize)
-    caml_array_bound_error();
+    caml_array_bound_error(cds);
   Store_double_field(array, idx, Double_val(newval));
   return Val_unit;
 }
 
-CAMLprim value caml_array_set(value array, value index, value newval)
+CAMLprim value caml_array_set(cdst cds, value array, value index, value newval)
 {
   if (Tag_val(array) == Double_array_tag)
-    return caml_array_set_float(array, index, newval);
+    return caml_array_set_float(cds, array, index, newval);
   else
-    return caml_array_set_addr(array, index, newval);
+    return caml_array_set_addr(cds, array, index, newval);
 }
 
-CAMLprim value caml_array_unsafe_get_float(value array, value index)
+CAMLprim value caml_array_unsafe_get_float(cdst cds, value array, value index)
 {
   double d;
   value res;
@@ -106,18 +106,18 @@ CAMLprim value caml_array_unsafe_get_float(value array, value index)
   return res;
 }
 
-CAMLprim value caml_array_unsafe_get(value array, value index)
+CAMLprim value caml_array_unsafe_get(cdst cds, value array, value index)
 {
   if (Tag_val(array) == Double_array_tag)
-    return caml_array_unsafe_get_float(array, index);
+    return caml_array_unsafe_get_float(cds, array, index);
   else
     return Field(array, Long_val(index));
 }
 
-CAMLprim value caml_array_unsafe_set_addr(value array, value index,value newval)
+CAMLprim value caml_array_unsafe_set_addr(cdst cds, value array, value index,value newval)
 {
   intnat idx = Long_val(index);
-  caml_modify_field(array, idx, newval);
+  caml_modify_field(cds, array, idx, newval);
   return Val_unit;
 }
 
@@ -127,15 +127,15 @@ CAMLprim value caml_array_unsafe_set_float(value array,value index,value newval)
   return Val_unit;
 }
 
-CAMLprim value caml_array_unsafe_set(value array, value index, value newval)
+CAMLprim value caml_array_unsafe_set(cdst cds, value array, value index, value newval)
 {
   if (Tag_val(array) == Double_array_tag)
     return caml_array_unsafe_set_float(array, index, newval);
   else
-    return caml_array_unsafe_set_addr(array, index, newval);
+    return caml_array_unsafe_set_addr(cds, array, index, newval);
 }
 
-CAMLprim value caml_make_float_vect(value len)
+CAMLprim value caml_make_float_vect(cdst cds, value len)
 {
   mlsize_t wosize = Long_val(len) * Double_wosize;
   value result;
@@ -150,13 +150,13 @@ CAMLprim value caml_make_float_vect(value len)
   }else if (wosize > Max_wosize)
     caml_invalid_argument("Array.make_float");
   else {
-    result = caml_alloc_shr (wosize, Double_array_tag);
-    result = caml_check_urgent_gc (result);
+    result = caml_alloc_shr (cds, wosize, Double_array_tag);
+    result = caml_check_urgent_gc (cds, result);
   }
   return result;
 }
 
-CAMLprim value caml_make_vect(value len, value init)
+CAMLprim value caml_make_vect(cdst cds, value len, value init)
 {
   CAMLparam2 (len, init);
   CAMLlocal1 (res);
@@ -172,30 +172,30 @@ CAMLprim value caml_make_vect(value len, value init)
     d = Double_val(init);
     wsize = size * Double_wosize;
     if (wsize > Max_wosize) caml_invalid_argument("Array.make");
-    res = caml_alloc(wsize, Double_array_tag);
+    res = caml_alloc(cds, wsize, Double_array_tag);
     for (i = 0; i < size; i++) {
       Store_double_field(res, i, d);
     }
   } else {
     if (size > Max_wosize) caml_invalid_argument("Array.make");
     if (size < Max_young_wosize) {
-      res = caml_alloc_small(size, 0);
+      res = caml_alloc_small(cds, size, 0);
       for (i = 0; i < size; i++) Init_field(res, i, init);
     }
     else {
       /* make sure init is not young, to avoid creating
          very many ref table entries */
       if (Is_block(init) && Is_young(init))
-        caml_minor_collection();
-      res = caml_alloc_shr(size, 0);
-      for (i = 0; i < size; i++) caml_initialize_field(res, i, init);
-      res = caml_check_urgent_gc (res);
+        caml_minor_collection(cds);
+      res = caml_alloc_shr(cds, size, 0);
+      for (i = 0; i < size; i++) caml_initialize_field(cds, res, i, init);
+      res = caml_check_urgent_gc (cds, res);
     }
   }
   CAMLreturn (res);
 }
 
-CAMLprim value caml_make_array(value init)
+CAMLprim value caml_make_array(cdst cds, value init)
 {
   CAMLparam1 (init);
   mlsize_t wsize, size, i;
@@ -212,10 +212,10 @@ CAMLprim value caml_make_array(value init)
     } else {
       wsize = size * Double_wosize;
       if (wsize <= Max_young_wosize) {
-        res = caml_alloc_small(wsize, Double_array_tag);
+        res = caml_alloc_small(cds, wsize, Double_array_tag);
       } else {
-        res = caml_alloc_shr(wsize, Double_array_tag);
-        res = caml_check_urgent_gc(res);
+        res = caml_alloc_shr(cds, wsize, Double_array_tag);
+        res = caml_check_urgent_gc(cds, res);
       }
       for (i = 0; i < size; i++) {
         Store_double_field(res, i, Double_val(Field(init, i)));
@@ -227,7 +227,7 @@ CAMLprim value caml_make_array(value init)
 
 /* Blitting */
 
-CAMLprim value caml_array_blit(value a1, value ofs1, value a2, value ofs2,
+CAMLprim value caml_array_blit(cdst cds, value a1, value ofs1, value a2, value ofs2,
                                value n)
 {
   if (Tag_val(a2) == Double_array_tag) {
@@ -239,17 +239,17 @@ CAMLprim value caml_array_blit(value a1, value ofs1, value a2, value ofs2,
             Long_val(n) * sizeof(double));
     return Val_unit;
   } else {
-    caml_blit_fields(a1, Long_val(ofs1), a2, Long_val(ofs2), Long_val(n));
+    caml_blit_fields(cds, a1, Long_val(ofs1), a2, Long_val(ofs2), Long_val(n));
     /* Many caml_modify_field in a row can create a lot of old-to-young refs.
        Give the minor GC a chance to run if it needs to. */
-    caml_check_urgent_gc(Val_unit);
+    caml_check_urgent_gc(cds, Val_unit);
     return Val_unit;
   }
 }
 
 /* A generic function for extraction and concatenation of sub-arrays */
 
-static value caml_array_gather(intnat num_arrays,
+static value caml_array_gather(cdst cds, intnat num_arrays,
                                value arrays[/*num_arrays*/],
                                intnat offsets[/*num_arrays*/],
                                intnat lengths[/*num_arrays*/])
@@ -274,7 +274,7 @@ static value caml_array_gather(intnat num_arrays,
     /* This is an array of floats.  We can use memcpy directly. */
     wsize = size * Double_wosize;
     if (wsize > Max_wosize) caml_invalid_argument("Array.concat");
-    res = caml_alloc(wsize, Double_array_tag);
+    res = caml_alloc(cds, wsize, Double_array_tag);
     for (i = 0, pos = 0; i < num_arrays; i++) {
       memcpy((double *)res + pos,
              (double *)arrays[i] + offsets[i],
@@ -288,36 +288,36 @@ static value caml_array_gather(intnat num_arrays,
     caml_invalid_argument("Array.concat");
   }
   else {
-    res = caml_alloc(size, 0);
+    res = caml_alloc(cds, size, 0);
     for (i = 0, pos = 0; i < num_arrays; i++) {
-      caml_blit_fields(arrays[i], offsets[i], res, pos, lengths[i]);
+      caml_blit_fields(cds, arrays[i], offsets[i], res, pos, lengths[i]);
       pos += lengths[i];
     }
     Assert(pos == size);
     /* Many caml_initialize_field in a row can create a lot of old-to-young
        refs.  Give the minor GC a chance to run if it needs to. */
-    res = caml_check_urgent_gc(res);
+    res = caml_check_urgent_gc(cds, res);
   }
   CAMLreturn (res);
 }
 
-CAMLprim value caml_array_sub(value a, value ofs, value len)
+CAMLprim value caml_array_sub(cdst cds, value a, value ofs, value len)
 {
   value arrays[1] = { a };
   intnat offsets[1] = { Long_val(ofs) };
   intnat lengths[1] = { Long_val(len) };
-  return caml_array_gather(1, arrays, offsets, lengths);
+  return caml_array_gather(cds, 1, arrays, offsets, lengths);
 }
 
-CAMLprim value caml_array_append(value a1, value a2)
+CAMLprim value caml_array_append(cdst cds, value a1, value a2)
 {
   value arrays[2] = { a1, a2 };
   intnat offsets[2] = { 0, 0 };
   intnat lengths[2] = { caml_array_length(a1), caml_array_length(a2) };
-  return caml_array_gather(2, arrays, offsets, lengths);
+  return caml_array_gather(cds, 2, arrays, offsets, lengths);
 }
 
-CAMLprim value caml_array_concat(value al)
+CAMLprim value caml_array_concat(cdst cds, value al)
 {
 #define STATIC_SIZE 16
   value static_arrays[STATIC_SIZE], * arrays;
@@ -345,7 +345,7 @@ CAMLprim value caml_array_concat(value al)
     lengths[i] = caml_array_length(Field(l, 0));
   }
   /* Do the concatenation */
-  res = caml_array_gather(n, arrays, offsets, lengths);
+  res = caml_array_gather(cds, n, arrays, offsets, lengths);
   /* Free the extra storage if needed */
   if (n > STATIC_SIZE) {
     caml_stat_free(arrays);

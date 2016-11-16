@@ -28,17 +28,17 @@ extern "C" {
 CAMLextern intnat volatile caml_signals_are_pending;
 CAMLextern intnat volatile caml_pending_signals[];
 CAMLextern int volatile caml_something_to_do;
-void caml_init_signal_handling(void);
+void caml_init_signal_handling(cdst cds);
 /* </private> */
 
-CAMLextern void caml_enter_blocking_section (void);
-CAMLextern void caml_leave_blocking_section (void);
+CAMLextern void caml_enter_blocking_section ();
+CAMLextern void caml_leave_blocking_section ();
 
 /* <private> */
 CAMLextern int caml_convert_signal_number (int);
 CAMLextern int caml_rev_convert_signal_number (int);
 void caml_record_signal(int signal_number);
-void caml_process_pending_signals(void);
+void caml_process_pending_signals(cdst);
 int caml_set_signal_action(int signo, int action);
 
 CAMLextern void (* volatile caml_async_action_hook)(void);

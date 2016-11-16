@@ -203,15 +203,10 @@ bits  63    10 9     8 7   0
   (((((uintnat)(val) ^ (uintnat)CAML_DOMAIN_STATE) - (1 << Minor_heap_align_bits)) & \
     Minor_val_bitmask) == 0)
 
+#define Field(x, i) (Is_foreign(((value*)x)[i]) ? caml_read_barrier(cds, x, i) : ((value*)x)[i])
+//#define Field(x, i) (((value *)(x)) [i] + 0)
 
-CAMLextern value caml_read_barrier(value, int);
-static inline value Field(value x, int i) {
-  value v = (((value*)x))[i];
-  //if (Is_young(v)) Assert(young_ptr < (char*)v);
-  return Is_foreign(v) ? caml_read_barrier(x, i) : v;
-  }
-  #define FieldImm(x, i) (((value *)(x)) [i] + 0)
-  //#define Field(x, i) (((value *)(x)) [i] + 0)
+#define FieldImm(x, i) (((value *)(x)) [i] + 0)
 
 /* initialise a field of an object just allocated on the minor heap */
 #define Init_field(block, offset, val) (Op_val(block)[offset] = val)
@@ -242,9 +237,9 @@ static inline value Field(value x, int i) {
 #define Object_tag 248
 #define Class_val(val) Field((val), 0)
 #define Oid_val(val) Long_val(Field((val), 1))
-CAMLextern value caml_get_public_method (value obj, value tag);
+CAMLextern value caml_get_public_method (cdst, value obj, value tag);
 /* Called as:
-   caml_callback(caml_get_public_method(obj, caml_hash_variant(name)), obj) */
+   caml_callback(caml_get_public_method(cdst, obj, caml_hash_variant(name)), obj) */
 /* caml_get_public_method returns 0 if tag not in the table.
    Note however that tags being hashed, same tag does not necessarily mean
    same method name. */
@@ -357,7 +352,7 @@ CAMLextern value caml_atom(tag_t);
 #define Val_emptylist Val_int(0)
 #define Tag_cons 0
 
-CAMLextern value caml_set_oo_id(value obj);
+CAMLextern value caml_set_oo_id(cdst, value obj);
 
 #ifdef __cplusplus
 }

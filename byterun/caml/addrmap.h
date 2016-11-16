@@ -26,6 +26,6 @@ void caml_addrmap_insert(struct addrmap* t, value k, value v);
 
 void caml_addrmap_clear(struct addrmap* t);
 
-void caml_addrmap_iter(struct addrmap* t, void (*f)(value, value));
+void caml_addrmap_iter(cdst, struct addrmap* t, void (*f)(cdst, value, value));
 
 #endif

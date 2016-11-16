@@ -17,11 +17,11 @@
 #include "mlvalues.h"
 #include "memory.h"
 
-CAMLprim value caml_record_backtrace(value vflag);
+CAMLprim value caml_record_backtrace(cdst, value vflag);
 #ifndef NATIVE_CODE
-extern void caml_stash_backtrace(value exn, code_t pc, value * sp, int reraise);
+extern void caml_stash_backtrace(cdst, value exn, code_t pc, value * sp, int reraise);
 extern void backtrace_cds_file_init();
 #endif
-CAMLextern void caml_print_exception_backtrace(void);
+CAMLextern void caml_print_exception_backtrace(cdst);
 
 #endif /* CAML_BACKTRACE_H */

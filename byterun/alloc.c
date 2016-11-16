@@ -28,7 +28,7 @@
 #define Setup_for_gc
 #define Restore_after_gc
 
-CAMLexport value caml_alloc (mlsize_t wosize, tag_t tag)
+CAMLexport value caml_alloc (cdst cds, mlsize_t wosize, tag_t tag)
 {
   value result;
   mlsize_t i;
@@ -43,17 +43,17 @@ CAMLexport value caml_alloc (mlsize_t wosize, tag_t tag)
       for (i = 0; i < wosize; i++) Init_field (result, i, Val_unit);
     }
   }else{
-    result = caml_alloc_shr (wosize, tag);
+    result = caml_alloc_shr (cds, wosize, tag);
     if (tag < No_scan_tag){
       for (i = 0; i < wosize; i++) Op_val(result)[i] = Val_unit;
     }
     if (tag == Stack_tag) Stack_sp(result) = 0;
-    result = caml_check_urgent_gc (result);
+    result = caml_check_urgent_gc (cds, result);
   }
   return result;
 }
 
-CAMLexport value caml_alloc_small (mlsize_t wosize, tag_t tag)
+CAMLexport value caml_alloc_small (cdst cds, mlsize_t wosize, tag_t tag)
 {
   value result;
 
@@ -64,16 +64,16 @@ CAMLexport value caml_alloc_small (mlsize_t wosize, tag_t tag)
   return result;
 }
 
-CAMLexport value caml_alloc_tuple(mlsize_t n)
+CAMLexport value caml_alloc_tuple(cdst cds, mlsize_t n)
 {
-  return caml_alloc(n, 0);
+  return caml_alloc(cds, n, 0);
 }
 
-CAMLexport value caml_alloc_string (mlsize_t len)
+CAMLexport value caml_alloc_string (cdst cds, mlsize_t len)
 {
   mlsize_t offset_index;
   mlsize_t wosize = (len + sizeof (value)) / sizeof (value);
-  value result = caml_alloc(wosize, String_tag);
+  value result = caml_alloc(cds, wosize, String_tag);
 
   Op_val (result) [wosize - 1] = 0;
   offset_index = Bsize_wsize (wosize) - 1;
@@ -81,25 +81,26 @@ CAMLexport value caml_alloc_string (mlsize_t len)
   return result;
 }
 
-CAMLexport value caml_alloc_final (mlsize_t len, final_fun fun,
+CAMLexport value caml_alloc_final (cdst cds, mlsize_t len, final_fun fun,
                                    mlsize_t mem, mlsize_t max)
 {
-  return caml_alloc_custom(caml_final_custom_operations(fun),
+  return caml_alloc_custom(cds, caml_final_custom_operations(fun),
                            len * sizeof(value), mem, max);
 }
 
-CAMLexport value caml_copy_string(char const *s)
+CAMLexport value caml_copy_string(cdst cds, char const *s)
 {
   int len;
   value res;
 
   len = strlen(s);
-  res = caml_alloc_string(len);
+  res = caml_alloc_string(cds, len);
   memmove(String_val(res), s, len);
   return res;
 }
 
-CAMLexport value caml_alloc_array(value (*funct)(char const *),
+CAMLexport value caml_alloc_array(cdst cds,
+                                  value (*funct)(cdst, char const *),
                                   char const ** arr)
 {
   CAMLparam0 ();
@@ -111,20 +112,20 @@ CAMLexport value caml_alloc_array(value (*funct)(char const *),
   if (nbr == 0) {
     CAMLreturn (Atom(0));
   } else {
-    result = caml_alloc (nbr, 0);
+    result = caml_alloc (cds, nbr, 0);
     for (n = 0; n < nbr; n++) {
-      caml_modify_field(result, n, funct(arr[n]));
+      caml_modify_field(cds, result, n, funct(cds, arr[n]));
     }
     CAMLreturn (result);
   }
 }
 
-CAMLexport value caml_copy_string_array(char const ** arr)
+CAMLexport value caml_copy_string_array(cdst cds, char const ** arr)
 {
-  return caml_alloc_array(caml_copy_string, arr);
+  return caml_alloc_array(cds, caml_copy_string, arr);
 }
 
-CAMLexport int caml_convert_flag_list(value list, const int *flags)
+CAMLexport int caml_convert_flag_list(cdst cds, value list, const int *flags)
 {
   int res;
   res = 0;
@@ -137,23 +138,23 @@ CAMLexport int caml_convert_flag_list(value list, const int *flags)
 
 /* For compiling let rec over values */
 
-CAMLprim value caml_alloc_dummy(value size)
+CAMLprim value caml_alloc_dummy(cdst cds, value size)
 {
   mlsize_t wosize = Int_val(size);
 
   if (wosize == 0) return Atom(0);
-  return caml_alloc (wosize, 0);
+  return caml_alloc (cds, wosize, 0);
 }
 
-CAMLprim value caml_alloc_dummy_float (value size)
+CAMLprim value caml_alloc_dummy_float (cdst cds, value size)
 {
   mlsize_t wosize = Int_val(size) * Double_wosize;
 
   if (wosize == 0) return Atom(0);
-  return caml_alloc (wosize, 0);
+  return caml_alloc (cds, wosize, 0);
 }
 
-CAMLprim value caml_update_dummy(value dummy, value newval)
+CAMLprim value caml_update_dummy(cdst cds, value dummy, value newval)
 {
   mlsize_t size, i;
   tag_t tag;
@@ -171,7 +172,7 @@ CAMLprim value caml_update_dummy(value dummy, value newval)
     }
   }else{
     for (i = 0; i < size; i++){
-      caml_modify_field (dummy, i, Field(newval, i));
+      caml_modify_field (cds, dummy, i, Field(newval, i));
     }
   }
   return Val_unit;

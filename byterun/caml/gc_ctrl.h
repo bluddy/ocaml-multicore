@@ -15,6 +15,7 @@
 #define CAML_GC_CTRL_H
 
 #include "misc.h"
+#include "domain_state.h"
 
 extern double
      caml_stat_minor_words,
@@ -35,7 +36,7 @@ extern uintnat
 
 uintnat caml_normalize_heap_increment (uintnat);
 
-void caml_init_gc ();
+cdst caml_init_gc ();
 
 
 #ifdef DEBUG

@@ -170,6 +170,8 @@ struct intern_stack {
 
 static void stack_init(struct intern_stack* s) {
   int i, j;
+  cdst cds = CAML_TL_DOMAIN_STATE;
+
   for (i = 0; i < INTERN_STACK_INIT_SIZE; i++) {
     for (j = 0; j < STACK_NFIELDS; j++) {
       s->first_vals[i][j] = Val_unit;
@@ -197,7 +199,7 @@ static void stack_free(struct intern_stack* s) {
   if (s->curr_vals != s->first_vals) caml_stat_free(s->curr_vals);
 }
 
-static void stack_realloc(struct intern_stack* s, value save) {
+static void stack_realloc(cdst cds, struct intern_stack* s, value save) {
   CAMLparam1(save);
   int i;
   int new_len = s->len * 2;
@@ -235,12 +237,12 @@ static void stack_realloc(struct intern_stack* s, value save) {
   CAMLreturn0;
 }
 
-static void stack_push(struct intern_stack* s, value v, int field, int op, intnat arg) {
+static void stack_push(cdst cds, struct intern_stack* s, value v, int field, int op, intnat arg) {
   if (Is_block(v)) {
     Assert(field < Wosize_hd(Hd_val(v)));
   }
   if (s->sp == s->len - 1) {
-    stack_realloc(s, v);
+    stack_realloc(cds, s, v);
   }
   STACK_VAL(s->curr_vals, s->sp) = v;
   STACK_FIELD(s->curr_vals, s->sp) = Val_int(field);
@@ -284,9 +286,9 @@ static void stack_advance_field(struct intern_stack* s) {
   }
 }
 
-static void stack_push_items(struct intern_stack* s, value dest, int n) {
+static void stack_push_items(cdst cds, struct intern_stack* s, value dest, int n) {
   if (n > 0) {
-    stack_push(s, dest, 0, OReadItems, n);
+    stack_push(cds, s, dest, 0, OReadItems, n);
   }
 }
 
@@ -300,7 +302,7 @@ static void intern_cleanup(struct intern_stack* s)
 }
 
 
-static value intern_rec(mlsize_t whsize, mlsize_t num_objects)
+static value intern_rec(cdst cds, mlsize_t whsize, mlsize_t num_objects)
 {
   int first = 1;
   int curr_field;
@@ -325,11 +327,11 @@ static value intern_rec(mlsize_t whsize, mlsize_t num_objects)
 
   use_intern_table = whsize > 0 && num_objects > 0;
   if (use_intern_table) {
-    intern_obj_table = caml_alloc(num_objects, 0);
+    intern_obj_table = caml_alloc(cds, num_objects, 0);
   }
 
   /* Initially let's try to read the first object from the stream */
-  stack_push(&S, Val_unit, 0, OReadItems, 1);
+  stack_push(cds, &S, Val_unit, 0, OReadItems, 1);
 
   /* The un-marshaler loop, the recursion is unrolled */
   while (!stack_is_empty(&S)) {
@@ -346,7 +348,7 @@ static value intern_rec(mlsize_t whsize, mlsize_t num_objects)
       /* Refresh the object ID */
       /* but do not do it for predefined exception slots */
       if (Int_val(Field(dest, 1)) >= 0)
-        caml_set_oo_id(dest);
+        caml_set_oo_id(cds, dest);
       /* Pop item and iterate */
       stack_pop(&S);
       break;
@@ -374,20 +376,20 @@ static value intern_rec(mlsize_t whsize, mlsize_t num_objects)
           } else {
             Assert(tag != Closure_tag);
             Assert(tag != Infix_tag);
-            v = caml_alloc(size, tag);
-            if (use_intern_table) caml_modify_field(intern_obj_table, obj_counter++, v);
+            v = caml_alloc(cds, size, tag);
+            if (use_intern_table) caml_modify_field(cds, intern_obj_table, obj_counter++, v);
             /* For objects, we need to freshen the oid */
             if (tag == Object_tag) {
               Assert(size >= 2);
               /* Request to read rest of the elements of the block */
-              if (size > 2) stack_push(&S, v, 2, OReadItems, size - 2);
+              if (size > 2) stack_push(cds, &S, v, 2, OReadItems, size - 2);
               /* Request freshing OID */
-              stack_push(&S, v, 1, OFreshOID, 1);
+              stack_push(cds, &S, v, 1, OFreshOID, 1);
               /* Finally read first two block elements: method table and old OID */
-              stack_push(&S, v, 0, OReadItems, 2);
+              stack_push(cds, &S, v, 0, OReadItems, 2);
             } else {
               /* If it's not an object then read the contents of the block */
-              stack_push_items(&S, v, size);
+              stack_push_items(cds, &S, v, size);
             }
           }
         } else {
@@ -399,8 +401,8 @@ static value intern_rec(mlsize_t whsize, mlsize_t num_objects)
           /* Small string */
           len = (code & 0x1F);
         read_string:
-          v = caml_alloc_string(len);
-          if (use_intern_table) caml_modify_field(intern_obj_table, obj_counter++, v);
+          v = caml_alloc_string(cds, len);
+          if (use_intern_table) caml_modify_field(cds, intern_obj_table, obj_counter++, v);
           readblock(String_val(v), len);
         } else {
           switch(code) {
@@ -460,16 +462,16 @@ static value intern_rec(mlsize_t whsize, mlsize_t num_objects)
             goto read_string;
           case CODE_DOUBLE_LITTLE:
           case CODE_DOUBLE_BIG:
-            v = caml_alloc(Double_wosize, Double_tag);
-            if (use_intern_table) caml_modify_field(intern_obj_table, obj_counter++, v);
+            v = caml_alloc(cds, Double_wosize, Double_tag);
+            if (use_intern_table) caml_modify_field(cds, intern_obj_table, obj_counter++, v);
             readfloat((double *) v, code);
             break;
           case CODE_DOUBLE_ARRAY8_LITTLE:
           case CODE_DOUBLE_ARRAY8_BIG:
             len = read8u();
           read_double_array:
-            v = caml_alloc(len * Double_wosize, Double_array_tag);
-            if (use_intern_table) caml_modify_field(intern_obj_table, obj_counter++, v);
+            v = caml_alloc(cds, len * Double_wosize, Double_array_tag);
+            if (use_intern_table) caml_modify_field(cds, intern_obj_table, obj_counter++, v);
             readfloats((double *) v, len, code);
             break;
           case CODE_DOUBLE_ARRAY32_LITTLE:
@@ -486,7 +488,7 @@ static value intern_rec(mlsize_t whsize, mlsize_t num_objects)
             } else {
               int found_placeholder;
               value function_placeholder =
-                caml_get_named_value ("Debugger.function_placeholder", &found_placeholder);
+                caml_get_named_value (cds, "Debugger.function_placeholder", &found_placeholder);
               if (found_placeholder) {
                 v = function_placeholder;
               } else {
@@ -514,8 +516,8 @@ static value intern_rec(mlsize_t whsize, mlsize_t num_objects)
               caml_failwith("input_value: unknown custom block identifier");
             }
             while (*intern_src++ != 0) /*nothing*/;  /*skip identifier*/
-            v = ops->deserialize();
-            if (use_intern_table) caml_modify_field(intern_obj_table, obj_counter++, v);
+            v = ops->deserialize(cds);
+            if (use_intern_table) caml_modify_field(cds, intern_obj_table, obj_counter++, v);
             break;
           default:
             intern_cleanup(&S);
@@ -528,7 +530,7 @@ static value intern_rec(mlsize_t whsize, mlsize_t num_objects)
         result = v;
         first = 0;
       } else {
-        caml_modify_field(dest, curr_field, v);
+        caml_modify_field(cds, dest, curr_field, v);
       }
       break;
     default:
@@ -539,7 +541,7 @@ static value intern_rec(mlsize_t whsize, mlsize_t num_objects)
   CAMLreturn(result);
 }
 
-value caml_input_val(struct channel *chan)
+value caml_input_val(cdst cds, struct channel *chan)
 {
   uint32 magic;
   mlsize_t block_len, num_objects, whsize;
@@ -573,28 +575,28 @@ value caml_input_val(struct channel *chan)
   intern_input_malloced = 1;
   intern_src = intern_input;
   /* Fill it in */
-  res = intern_rec(whsize, num_objects);
+  res = intern_rec(cds, whsize, num_objects);
   /* Free everything */
   /* !! 
   caml_stat_free(intern_input);
   */
-  res = caml_check_urgent_gc(res);
+  res = caml_check_urgent_gc(cds, res);
   return res;
 }
 
-CAMLprim value caml_input_value(value vchan)
+CAMLprim value caml_input_value(cdst cds, value vchan)
 {
   CAMLparam1 (vchan);
   struct channel * chan = Channel(vchan);
   CAMLlocal1 (res);
 
   With_mutex(&chan->mutex) {
-    res = caml_input_val(chan);
+    res = caml_input_val(cds, chan);
   }
   CAMLreturn (res);
 }
 
-static value input_val_from_block(void)
+static value input_val_from_block(cdst cds)
 {
   mlsize_t num_objects, whsize;
   value obj;
@@ -608,12 +610,12 @@ static value input_val_from_block(void)
   intern_src += 4;  /* skip size_64 */
 #endif
   /* Fill it in */
-  obj = intern_rec(whsize, num_objects);
+  obj = intern_rec(cds, whsize, num_objects);
   /* Free internal data structures */
-  return caml_check_urgent_gc(obj);
+  return caml_check_urgent_gc(cds, obj);
 }
 
-CAMLexport value caml_input_value_from_malloc(char * data, intnat ofs)
+CAMLexport value caml_input_value_from_malloc(cdst cds, char * data, intnat ofs)
 {
   uint32 magic;
   value obj;
@@ -625,13 +627,13 @@ CAMLexport value caml_input_value_from_malloc(char * data, intnat ofs)
   if (magic != Intext_magic_number)
     caml_failwith("input_value_from_malloc: bad object");
   intern_src += 4;  /* Skip block_len */
-  obj = input_val_from_block();
+  obj = input_val_from_block(cds);
   /* Free the input */
   caml_stat_free(intern_input);
   return obj;
 }
 
-CAMLexport value caml_input_value_from_block(char * data, intnat len)
+CAMLexport value caml_input_value_from_block(cdst cds, char * data, intnat len)
 {
   uint32 magic;
   mlsize_t block_len;
@@ -646,11 +648,11 @@ CAMLexport value caml_input_value_from_block(char * data, intnat len)
   block_len = read32u();
   if (5*4 + block_len > len)
     caml_failwith("input_value_from_block: bad block length");
-  obj = input_val_from_block();
+  obj = input_val_from_block(cds);
   return obj;
 }
 
-CAMLexport value caml_input_val_from_string(value str, intnat ofs)
+CAMLexport value caml_input_val_from_string(cdst cds, value str, intnat ofs)
 {
   CAMLparam1 (str);
   CAMLlocal1 (obj);
@@ -659,19 +661,19 @@ CAMLexport value caml_input_val_from_string(value str, intnat ofs)
   intern_input_malloced = 1;
   memcpy(intern_input, &Byte(str, 0), caml_string_length(str));
   intern_src = intern_input + 2*4;
-  obj = input_val_from_block();
+  obj = input_val_from_block(cds);
   caml_stat_free(intern_input);
 
   CAMLreturn (obj);
 }
 
-CAMLprim value caml_input_value_from_string(value str, value ofs)
+CAMLprim value caml_input_value_from_string(cdst cds, value str, value ofs)
 {
-  return caml_input_val_from_string(str, Long_val(ofs));
+  return caml_input_val_from_string(cds, str, Long_val(ofs));
 }
 
 
-CAMLprim value caml_marshal_data_size(value buff, value ofs)
+CAMLprim value caml_marshal_data_size(cdst cds, value buff, value ofs)
 {
   uint32 magic;
   mlsize_t block_len;

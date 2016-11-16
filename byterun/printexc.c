@@ -50,6 +50,7 @@ CAMLexport char * caml_format_exception(value exn)
   struct stringbuf buf;
   char intbuf[64];
   char * res;
+  cdst cds = CAML_TL_DOMAIN_STATE;
 
   buf.ptr = buf.data;
   buf.end = buf.data + sizeof(buf.data) - 1;
@@ -59,7 +60,7 @@ CAMLexport char * caml_format_exception(value exn)
     if (Wosize_val(exn) == 2 &&
         Is_block(Field(exn, 1)) &&
         Tag_val(Field(exn, 1)) == 0 &&
-        caml_is_special_exception(Field(exn, 0))) {
+        caml_is_special_exception(cds, Field(exn, 0))) {
       bucket = Field(exn, 1);
       start = 0;
     } else {
@@ -102,7 +103,7 @@ CAMLexport char * caml_format_exception(value exn)
 #endif
 
 /* Default C implementation in case the OCaml one is not registered. */
-static void default_fatal_uncaught_exception(value exn)
+static void default_fatal_uncaught_exception(cdst cds, value exn)
 {
   char * msg;
   value at_exit;
@@ -117,8 +118,8 @@ static void default_fatal_uncaught_exception(value exn)
   saved_backtrace_active = CAML_DOMAIN_STATE->backtrace_active;
   saved_backtrace_pos = CAML_DOMAIN_STATE->backtrace_pos;
   CAML_DOMAIN_STATE->backtrace_active = 0;
-  at_exit = caml_get_named_value("Pervasives.do_at_exit", &found_do_at_exit);
-  if (found_do_at_exit) caml_callback_exn(at_exit, Val_unit);
+  at_exit = caml_get_named_value(cds, "Pervasives.do_at_exit", &found_do_at_exit);
+  if (found_do_at_exit) caml_callback_exn(cds, at_exit, Val_unit);
   CAML_DOMAIN_STATE->backtrace_active = saved_backtrace_active;
   CAML_DOMAIN_STATE->backtrace_pos = saved_backtrace_pos;
   /* Display the uncaught exception */
@@ -126,22 +127,23 @@ static void default_fatal_uncaught_exception(value exn)
   free(msg);
   /* Display the backtrace if available */
   if (CAML_DOMAIN_STATE->backtrace_active && !DEBUGGER_IN_USE)
-    caml_print_exception_backtrace();
+    caml_print_exception_backtrace(cds);
 }
 
 void caml_fatal_uncaught_exception(value exn)
 {
+  cdst cds = CAML_TL_DOMAIN_STATE;
   value handle_uncaught_exception;
   int found_uncaught_exception;
 
   handle_uncaught_exception =
-    caml_get_named_value("Printexc.handle_uncaught_exception",
+    caml_get_named_value(cds, "Printexc.handle_uncaught_exception",
                          &found_uncaught_exception);
   if (found_uncaught_exception)
     /* [Printexc.handle_uncaught_exception] does not raise exception. */
-    caml_callback2(handle_uncaught_exception, exn, Val_bool(DEBUGGER_IN_USE));
+    caml_callback2(cds, handle_uncaught_exception, exn, Val_bool(DEBUGGER_IN_USE));
   else
-    default_fatal_uncaught_exception(exn);
+    default_fatal_uncaught_exception(cds, exn);
   /* Terminate the process */
   exit(2);
 }

@@ -22,9 +22,9 @@
 
 void caml_init_global_roots(void);
 
-void caml_scan_global_roots(scanning_action f);
+void caml_scan_global_roots(cdst cds, scanning_action f);
 
-void caml_cleanup_deleted_roots(void);
+void caml_cleanup_deleted_roots(cdst);
 
 #ifdef NATIVE_CODE
 void caml_register_dyn_global(void *v);

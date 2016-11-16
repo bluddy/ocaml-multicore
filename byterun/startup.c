@@ -119,7 +119,7 @@ int caml_attempt_open(char **name, struct exec_trailer *trail,
 
 /* Read the section descriptors */
 
-void caml_read_section_descriptors(int fd, struct exec_trailer *trail)
+void caml_read_section_descriptors(cdst cds, int fd, struct exec_trailer *trail)
 {
   int toc_size, i;
 
@@ -167,7 +167,7 @@ int32 caml_seek_section(int fd, struct exec_trailer *trail, char *name)
 /* Read and return the contents of the section having the given name.
    Add a terminating 0.  Return NULL if no such section. */
 
-static char * read_section(int fd, struct exec_trailer *trail, char *name)
+static char * read_section(cdst cds, int fd, struct exec_trailer *trail, char *name)
 {
   int32 len;
   char * data;
@@ -223,6 +223,7 @@ extern void caml_install_invalid_parameter_handler();
 
 CAMLexport void caml_main(char **argv)
 {
+  cdst cds = 0;
   int fd, pos;
   struct exec_trailer trail;
   struct channel * chan;
@@ -242,6 +243,8 @@ CAMLexport void caml_main(char **argv)
   caml_install_invalid_parameter_handler();
 #endif
   caml_init_custom_operations();
+  /* TODO: Problem if we run out of space: cds uninitialized here.
+   * Conversion to local var found a potential bug */
   caml_ext_table_init(&caml_shared_libs_path, 8);
   /* Determine options and position of bytecode file */
   pos = 0;
@@ -279,23 +282,23 @@ CAMLexport void caml_main(char **argv)
   caml_startup_params.main_argv = argv + pos;
 
   /* Read the table of contents (section descriptors) */
-  caml_read_section_descriptors(fd, &trail);
+  caml_read_section_descriptors(cds, fd, &trail);
   /* Initialize the abstract machine */
-  caml_init_gc ();
+  cds = caml_init_gc ();
   CAML_DOMAIN_STATE->external_raise = NULL;
-  if (caml_startup_params.backtrace_enabled_init) caml_record_backtrace(Val_int(1));
+  if (caml_startup_params.backtrace_enabled_init) caml_record_backtrace(cds, Val_int(1));
   if (caml_startup_params.eventlog_enabled) caml_setup_eventlog();
   /* Initialize the interpreter */
-  caml_interprete(NULL, 0);
+  caml_interprete(cds, NULL, 0);
   /* Initialize the debugger, if needed */
-  caml_debugger_init();
+  caml_debugger_init(cds);
   /* Load the code */
   caml_code_size = caml_seek_section(fd, &trail, "CODE");
-  caml_load_code(fd, caml_code_size);
+  caml_load_code(cds, fd, caml_code_size);
   /* Build the table of primitives */
-  shared_lib_path = read_section(fd, &trail, "DLPT");
-  shared_libs = read_section(fd, &trail, "DLLS");
-  req_prims = read_section(fd, &trail, "PRIM");
+  shared_lib_path = read_section(cds, fd, &trail, "DLPT");
+  shared_libs = read_section(cds, fd, &trail, "DLLS");
+  req_prims = read_section(cds, fd, &trail, "PRIM");
   if (req_prims == NULL) caml_fatal_error("Fatal error: no PRIM section\n");
   caml_build_primitive_table(shared_lib_path, shared_libs, req_prims);
   caml_stat_free(shared_lib_path);
@@ -304,7 +307,7 @@ CAMLexport void caml_main(char **argv)
   /* Load the globals */
   caml_seek_section(fd, &trail, "DATA");
   chan = caml_open_descriptor_in(fd);
-  caml_modify_root(caml_global_data, caml_input_val(chan));
+  caml_modify_root(cds, caml_global_data, caml_input_val(cds, chan));
   caml_close_channel(chan); /* this also closes fd */
   caml_stat_free(trail.section);
 #ifdef _WIN32
@@ -313,14 +316,14 @@ CAMLexport void caml_main(char **argv)
     _beginthread(caml_signal_thread, 4096, NULL);
 #endif
   /* Execute the program */
-  caml_debugger(PROGRAM_START);
-  res = caml_interprete(caml_start_code, caml_code_size);
+  caml_debugger(cds, PROGRAM_START);
+  res = caml_interprete(cds, caml_start_code, caml_code_size);
   if (Is_exception_result(res)) {
     CAML_DOMAIN_STATE->exn_bucket = Extract_exception(res);
     if (caml_debugger_in_use) {
       CAML_DOMAIN_STATE->extern_sp = &CAML_DOMAIN_STATE->exn_bucket; /* The debugger needs the
                                                exception value.*/
-      caml_debugger(UNCAUGHT_EXC);
+      caml_debugger(cds, UNCAUGHT_EXC);
     }
     caml_fatal_uncaught_exception(CAML_DOMAIN_STATE->exn_bucket);
   }
@@ -334,6 +337,7 @@ CAMLexport void caml_startup_code(
            char *section_table, asize_t section_table_size,
            char **argv)
 {
+  cdst cds;
   value res;
   char * exe_name;
   static char proc_self_exe[256];
@@ -356,13 +360,13 @@ CAMLexport void caml_startup_code(
   caml_startup_params.exe_name = exe_name;
   caml_startup_params.main_argv = argv;
   /* Initialize the abstract machine */
-  caml_init_gc ();
-  if (caml_startup_params.backtrace_enabled_init) caml_record_backtrace(Val_int(1));
+  cds = caml_init_gc ();
+  if (caml_startup_params.backtrace_enabled_init) caml_record_backtrace(cds, Val_int(1));
   CAML_DOMAIN_STATE->external_raise = NULL;
   /* Initialize the interpreter */
-  caml_interprete(NULL, 0);
+  caml_interprete(cds, NULL, 0);
   /* Initialize the debugger, if needed */
-  caml_debugger_init();
+  caml_debugger_init(cds);
   /* Load the code */
   caml_start_code = code;
   caml_code_size = code_size;
@@ -379,19 +383,19 @@ CAMLexport void caml_startup_code(
   /* Use the builtin table of primitives */
   caml_build_primitive_table_builtin();
   /* Load the globals */
-  caml_modify_root(caml_global_data, caml_input_value_from_block(data, data_size));
+  caml_modify_root(cds, caml_global_data, caml_input_value_from_block(cds, data, data_size));
   /* Record the sections (for caml_get_section_table in meta.c) */
   caml_section_table = section_table;
   caml_section_table_size = section_table_size;
   /* Execute the program */
-  caml_debugger(PROGRAM_START);
-  res = caml_interprete(caml_start_code, caml_code_size);
+  caml_debugger(cds, PROGRAM_START);
+  res = caml_interprete(cds, caml_start_code, caml_code_size);
   if (Is_exception_result(res)) {
     CAML_DOMAIN_STATE->exn_bucket = Extract_exception(res);
     if (caml_debugger_in_use) {
       CAML_DOMAIN_STATE->extern_sp = &CAML_DOMAIN_STATE->exn_bucket; /* The debugger needs the
                                                exception value.*/
-      caml_debugger(UNCAUGHT_EXC);
+      caml_debugger(cds, UNCAUGHT_EXC);
     }
     caml_fatal_uncaught_exception(CAML_DOMAIN_STATE->exn_bucket);
   }

@@ -178,7 +178,7 @@ CAMLexport uint32 caml_hash_mix_string(uint32 h, value s)
 
 /* The generic hash function */
 
-CAMLprim value caml_hash(value count, value limit, value seed, value obj)
+CAMLprim value caml_hash(cdst cds, value count, value limit, value seed, value obj)
 {
   value queue[HASH_QUEUE_SIZE]; /* Queue of values to examine */
   intnat rd;                    /* Position of first value in queue */

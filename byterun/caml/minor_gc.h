@@ -39,19 +39,19 @@ struct caml_remembered_set {
   struct addrmap promotion, promotion_rev;
 };
 
-extern void caml_set_minor_heap_size (asize_t); /* size in bytes */
-extern void caml_empty_minor_heap (void);
-CAMLextern void caml_minor_collection (void);
+extern void caml_set_minor_heap_size (cdst, asize_t); /* size in bytes */
+extern void caml_empty_minor_heap (cdst);
+CAMLextern void caml_minor_collection (cdst);
 CAMLextern void garbage_collection (void); /* def in asmrun/signals.c */
 extern void caml_realloc_ref_table (struct caml_ref_table *);
 extern void caml_alloc_table (struct caml_ref_table *, asize_t, asize_t);
 struct domain;
-CAMLextern value caml_promote(struct domain*, value root);
+CAMLextern value caml_promote(cdst, struct domain*, value root);
 
 #define Oldify(p) do{ \
     value __oldify__v__ = *p; \
     if (Is_block (__oldify__v__) && Is_young (__oldify__v__)){ \
-      caml_oldify_one (__oldify__v__, (p)); \
+      caml_oldify_one (cds, __oldify__v__, (p)); \
     } \
   }while(0)
 

@@ -22,12 +22,12 @@ static __thread uintnat stat_blocks_marked = 0;
 
 uintnat caml_percent_free = Percent_free_def;
 
-void caml_init_major_gc() {
+void caml_init_major_gc(cdst cds) {
   CAML_DOMAIN_STATE->mark_stack = caml_stat_alloc(MARK_STACK_SIZE * sizeof(value));
   CAML_DOMAIN_STATE->mark_stack_count = 0;
 }
 
-static uintnat default_slice_budget() {
+static uintnat default_slice_budget(cdst cds) {
   /*
      Free memory at the start of the GC cycle (garbage + free list) (assumed):
                  FM = caml_stat_heap_size * caml_percent_free
@@ -71,14 +71,14 @@ static uintnat default_slice_budget() {
   //return 1ll << 50;
 }
 
-static void mark_stack_push(value v) {
+static void mark_stack_push(cdst cds, value v) {
   Assert(Is_block(v));
   if (CAML_DOMAIN_STATE->mark_stack_count >= MARK_STACK_SIZE)
     caml_fatal_error("mark stack overflow");
   CAML_DOMAIN_STATE->mark_stack[CAML_DOMAIN_STATE->mark_stack_count++] = v;
 }
 
-static int mark_stack_pop(value* ret) {
+static int mark_stack_pop(cdst cds, value* ret) {
   if (CAML_DOMAIN_STATE->mark_stack_count == 0)
     return 0;
   *ret = CAML_DOMAIN_STATE->mark_stack[--CAML_DOMAIN_STATE->mark_stack_count];
@@ -87,7 +87,7 @@ static int mark_stack_pop(value* ret) {
 
 #define Is_markable(v) (Is_block(v) && !Is_minor(v))
 
-static value mark_normalise(value v) {
+static value mark_normalise(cdst cds, value v) {
   Assert(Is_markable(v));
   if (Tag_val(v) == Forward_tag) {
     /* FIXME: short-circuiting lazy values is a useful optimisation */
@@ -97,7 +97,7 @@ static value mark_normalise(value v) {
   return v;
 }
 
-static intnat mark(value initial, intnat budget) {
+static intnat mark(cdst cds, value initial, intnat budget) {
   value next = initial;
   int found_next = 1;
   while (budget > 0 && found_next) {
@@ -112,19 +112,19 @@ static intnat mark(value initial, intnat budget) {
     /* mark the current object */
     hd_v = Hd_val(v);
     if (Tag_hd (hd_v) == Stack_tag) {
-      caml_scan_stack(&caml_darken, v);
+      caml_scan_stack(cds, &caml_darken, v);
     } else if (Tag_hd (hd_v) < No_scan_tag) {
       int i;
       for (i = 0; i < Wosize_hd(hd_v); i++) {
         value child = Field(v, i);
         if (Is_markable(child)) {
-          child = mark_normalise(child);
+          child = mark_normalise(cds, child);
           if (caml_mark_object(child)) {
             if (!found_next) {
               next = child;
               found_next = 1;
             } else {
-              mark_stack_push(child);
+              mark_stack_push(cds, child);
             }
           }
         }
@@ -134,26 +134,26 @@ static intnat mark(value initial, intnat budget) {
 
     /* if we haven't found any markable children, pop an object to mark */
     if (!found_next) {
-      found_next = mark_stack_pop(&next);
+      found_next = mark_stack_pop(cds, &next);
     }
   }
   if (found_next) {
-    mark_stack_push(next);
+    mark_stack_push(cds, next);
   }
   return budget;
 }
 
-void caml_darken(value v, value* ignored) {
+void caml_darken(cdst cds, value v, value* ignored) {
   /* Assert (Is_markable(v)); */
   if (!Is_markable (v)) return; /* foreign stack, at least */
 
-  v = mark_normalise(v);
-  if (caml_mark_object(v)) mark_stack_push(v);
+  v = mark_normalise(cds, v);
+  if (caml_mark_object(v)) mark_stack_push(cds, v);
 }
 
-intnat caml_major_collection_slice(intnat howmuch)
+intnat caml_major_collection_slice(cdst cds, intnat howmuch)
 {
-  intnat computed_work = howmuch ? howmuch : default_slice_budget();
+  intnat computed_work = howmuch ? howmuch : default_slice_budget(cds);
   intnat budget = computed_work;
   intnat sweep_work, mark_work;
   uintnat blocks_marked_before = stat_blocks_marked;
@@ -166,14 +166,14 @@ intnat caml_major_collection_slice(intnat howmuch)
   sweep_work -= budget;
 
   if (gc_phase == Phase_idle) {
-    caml_do_local_roots(&caml_darken, caml_domain_self());
-    caml_scan_global_roots(&caml_darken);
+    caml_do_local_roots(cds, &caml_darken, caml_domain_self());
+    caml_scan_global_roots(cds, &caml_darken);
     gc_phase = Phase_marking;
   }
 
   mark_work = budget;
-  if (mark_stack_pop(&v))
-    budget = mark(v, budget);
+  if (mark_stack_pop(cds, &v))
+    budget = mark(cds, v, budget);
   mark_work -= budget;
 
   caml_gc_log("Major slice: %lu alloc, %ld work, %ld sweep, %ld mark (%lu blocks)",
@@ -181,30 +181,30 @@ intnat caml_major_collection_slice(intnat howmuch)
               (long)computed_work, (long)sweep_work, (long)mark_work,
               (unsigned long)(stat_blocks_marked - blocks_marked_before));
   CAML_DOMAIN_STATE->allocated_words = 0;
-  caml_restore_stack_gc();
+  caml_restore_stack_gc(cds);
 
   if (budget > 0) {
     caml_trigger_stw_gc();
-    caml_handle_gc_interrupt();
+    caml_handle_gc_interrupt(cds);
   }
 
 
   return computed_work;
 }
 
-void caml_finish_marking () {
+void caml_finish_marking (cdst cds) {
   caml_save_stack_gc();
-  caml_do_local_roots(&caml_darken, caml_domain_self());
-  caml_scan_global_roots(&caml_darken);
-  caml_empty_mark_stack();
+  caml_do_local_roots(cds, &caml_darken, caml_domain_self());
+  caml_scan_global_roots(cds, &caml_darken);
+  caml_empty_mark_stack(cds);
   CAML_DOMAIN_STATE->allocated_words = 0;
-  caml_restore_stack_gc();
+  caml_restore_stack_gc(cds);
 }
 
-void caml_empty_mark_stack () {
+void caml_empty_mark_stack (cdst cds) {
   value v;
 
-  while (mark_stack_pop(&v)) mark(v, 10000000);
+  while (mark_stack_pop(cds, &v)) mark(cds, v, 10000000);
 
   if (stat_blocks_marked)
     caml_gc_log("Finished marking major heap. Marked %u blocks", (unsigned)stat_blocks_marked);

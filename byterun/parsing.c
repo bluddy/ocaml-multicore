@@ -110,7 +110,7 @@ static char * token_name(char * names, int number)
   return names;
 }
 
-static void print_token(struct parser_tables *tables, int state, value tok)
+static void print_token(cdst cds, struct parser_tables *tables, int state, value tok)
 {
   value v;
 
@@ -135,7 +135,7 @@ static void print_token(struct parser_tables *tables, int state, value tok)
 
 /* The pushdown automata */
 
-CAMLprim value caml_parse_engine(struct parser_tables *tables,
+CAMLprim value caml_parse_engine(cdst cds, struct parser_tables *tables,
                                  struct parser_env *env, value cmd, value arg)
 {
   int state;
@@ -162,16 +162,16 @@ CAMLprim value caml_parse_engine(struct parser_tables *tables,
     RESTORE;
     if (Is_block(arg)) {
       env->curr_char = Field(tables->transl_block, Tag_val(arg));
-      caml_modify_field((value)env,
+      caml_modify_field(cds, (value)env,
                         offsetof(struct parser_env, lval) / sizeof(value),
                         Field(arg, 0));
     } else {
       env->curr_char = Field(tables->transl_const, Int_val(arg));
-      caml_modify_field((value)env,
+      caml_modify_field(cds, (value)env,
                         offsetof(struct parser_env, lval) / sizeof(value),
                         Val_long(0));
     }
-    if (caml_startup_params.parser_trace) print_token(tables, state, arg);
+    if (caml_startup_params.parser_trace) print_token(cds, tables, state, arg);
 
   testshift:
     n1 = Short(tables->sindex, state);
@@ -277,7 +277,7 @@ CAMLprim value caml_parse_engine(struct parser_tables *tables,
   case SEMANTIC_ACTION_COMPUTED:
     RESTORE;
     Store_field(env->s_stack, sp, Val_int(state));
-    caml_modify_field(env->v_stack, sp, arg);
+    caml_modify_field(cds, env->v_stack, sp, arg);
     asp = Int_val(env->asp);
     Store_field (env->symb_end_stack, sp, Field(env->symb_end_stack, asp));
     if (sp > asp) {

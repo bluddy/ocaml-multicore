@@ -94,12 +94,12 @@ void caml_addrmap_insert(struct addrmap* t, value k, value v) {
   *p = v;
 }
 
-void caml_addrmap_iter(struct addrmap* t, void (*f)(value, value)) {
+void caml_addrmap_iter(cdst cds, struct addrmap* t, void (*f)(cdst, value, value)) {
   int i;
   if (!t->entries) return;
 
   for (i = 0; i < t->size; i++) {
     if (t->entries[i].key != INVALID_KEY)
-      f(t->entries[i].key, t->entries[i].value);
+      f(cds, t->entries[i].key, t->entries[i].value);
   }
 }

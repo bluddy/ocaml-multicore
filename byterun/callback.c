@@ -36,11 +36,12 @@ static opcode_t callback_code[] = { ACC, 0, APPLY, 0, POP, 1, STOP };
 static void init_callback_code(void)
 {
 #ifdef THREADED_CODE
+  cdst cds = CAML_TL_DOMAIN_STATE;
   caml_thread_code(callback_code, sizeof(callback_code));
 #endif
 }
 
-CAMLexport value caml_callbackN_exn(value closure, int narg, value args[])
+CAMLexport value caml_callbackN_exn(cdst cds, value closure, int narg, value args[])
 {
   CAMLparam0();
   CAMLlocal1(parent_stack);
@@ -63,7 +64,7 @@ CAMLexport value caml_callbackN_exn(value closure, int narg, value args[])
   CAML_DOMAIN_STATE->extern_sp[narg + 1] = Val_unit;    /* environment */
   CAML_DOMAIN_STATE->extern_sp[narg + 2] = Val_long(0); /* extra args */
   CAML_DOMAIN_STATE->extern_sp[narg + 3] = closure;
-  res = caml_interprete(code, sizeof(code));
+  res = caml_interprete(cds, code, sizeof(code));
   if (Is_exception_result(res)) CAML_DOMAIN_STATE->extern_sp += narg + 4; /* PR#1228 */
 
   Assert(Stack_parent(CAML_DOMAIN_STATE->current_stack) == Val_unit);
@@ -71,29 +72,29 @@ CAMLexport value caml_callbackN_exn(value closure, int narg, value args[])
   CAMLreturn (res);
 }
 
-CAMLexport value caml_callback_exn(value closure, value arg1)
+CAMLexport value caml_callback_exn(cdst cds, value closure, value arg1)
 {
   value arg[1];
   arg[0] = arg1;
-  return caml_callbackN_exn(closure, 1, arg);
+  return caml_callbackN_exn(cds, closure, 1, arg);
 }
 
-CAMLexport value caml_callback2_exn(value closure, value arg1, value arg2)
+CAMLexport value caml_callback2_exn(cdst cds, value closure, value arg1, value arg2)
 {
   value arg[2];
   arg[0] = arg1;
   arg[1] = arg2;
-  return caml_callbackN_exn(closure, 2, arg);
+  return caml_callbackN_exn(cds, closure, 2, arg);
 }
 
-CAMLexport value caml_callback3_exn(value closure,
+CAMLexport value caml_callback3_exn(cdst cds, value closure,
                                value arg1, value arg2, value arg3)
 {
   value arg[3];
   arg[0] = arg1;
   arg[1] = arg2;
   arg[2] = arg3;
-  return caml_callbackN_exn(closure, 3, arg);
+  return caml_callbackN_exn(cds, closure, 3, arg);
 }
 
 #else /* Nativecode callbacks */
@@ -126,7 +127,7 @@ CAMLexport value caml_callback3_exn(value closure,
 
 /* Native-code callbacks.  caml_callback[123]_exn are implemented in asm. */
 
-CAMLexport value caml_callbackN_exn(value closure, int narg, value args[])
+CAMLexport value caml_callbackN_exn(cdst cds, value closure, int narg, value args[])
 {
   CAMLparam1 (closure);
   CAMLxparamN (args, narg);
@@ -161,32 +162,32 @@ CAMLexport value caml_callbackN_exn(value closure, int narg, value args[])
 
 /* Exception-propagating variants of the above */
 
-CAMLexport value caml_callback (value closure, value arg)
+CAMLexport value caml_callback (cdst cds, value closure, value arg)
 {
-  value res = caml_callback_exn(closure, arg);
-  if (Is_exception_result(res)) caml_raise(Extract_exception(res));
+  value res = caml_callback_exn(cds, closure, arg);
+  if (Is_exception_result(res)) caml_raise(cds, Extract_exception(res));
   return res;
 }
 
-CAMLexport value caml_callback2 (value closure, value arg1, value arg2)
+CAMLexport value caml_callback2 (cdst cds, value closure, value arg1, value arg2)
 {
-  value res = caml_callback2_exn(closure, arg1, arg2);
-  if (Is_exception_result(res)) caml_raise(Extract_exception(res));
+  value res = caml_callback2_exn(cds, closure, arg1, arg2);
+  if (Is_exception_result(res)) caml_raise(cds, Extract_exception(res));
   return res;
 }
 
-CAMLexport value caml_callback3 (value closure, value arg1, value arg2,
+CAMLexport value caml_callback3 (cdst cds, value closure, value arg1, value arg2,
                                  value arg3)
 {
-  value res = caml_callback3_exn(closure, arg1, arg2, arg3);
-  if (Is_exception_result(res)) caml_raise(Extract_exception(res));
+  value res = caml_callback3_exn(cds, closure, arg1, arg2, arg3);
+  if (Is_exception_result(res)) caml_raise(cds, Extract_exception(res));
   return res;
 }
 
-CAMLexport value caml_callbackN (value closure, int narg, value args[])
+CAMLexport value caml_callbackN (cdst cds, value closure, int narg, value args[])
 {
-  value res = caml_callbackN_exn(closure, narg, args);
-  if (Is_exception_result(res)) caml_raise(Extract_exception(res));
+  value res = caml_callbackN_exn(cds, closure, narg, args);
+  if (Is_exception_result(res)) caml_raise(cds, Extract_exception(res));
   return res;
 }
 
@@ -215,7 +216,7 @@ static unsigned int hash_value_name(char const *name)
   return h % Named_value_size;
 }
 
-CAMLprim value caml_register_named_value(value vname, value val)
+CAMLprim value caml_register_named_value(cdst cds, value vname, value val)
 {
   struct named_value * nv;
   char * name = String_val(vname);
@@ -226,7 +227,7 @@ CAMLprim value caml_register_named_value(value vname, value val)
   caml_plat_lock(&named_value_lock);
   for (nv = named_value_table[h]; nv != NULL; nv = nv->next) {
     if (strcmp(name, nv->name) == 0) {
-      caml_modify_root(nv->val, val);
+      caml_modify_root(cds, nv->val, val);
       found = 1;
       break;
     }
@@ -235,7 +236,7 @@ CAMLprim value caml_register_named_value(value vname, value val)
     nv = (struct named_value *)
       caml_stat_alloc(sizeof(struct named_value) + namelen);
     memcpy(nv->name, name, namelen + 1);
-    nv->val = caml_create_root(val);
+    nv->val = caml_create_root(cds, val);
     nv->next = named_value_table[h];
     named_value_table[h] = nv;
   }
@@ -243,7 +244,7 @@ CAMLprim value caml_register_named_value(value vname, value val)
   return Val_unit;
 }
 
-CAMLexport value caml_get_named_value(char const *name, int* found_res)
+CAMLexport value caml_get_named_value(cdst cds, char const *name, int* found_res)
 {
   struct named_value * nv;
   int found = 0;
@@ -253,7 +254,7 @@ CAMLexport value caml_get_named_value(char const *name, int* found_res)
        nv != NULL;
        nv = nv->next) {
     if (strcmp(name, nv->name) == 0){
-      ret = caml_read_root(nv->val);
+      ret = caml_read_root(cds, nv->val);
       found = 1;
       break;
     }

@@ -48,45 +48,45 @@ void caml_init_global_roots()
   caml_plat_mutex_init(&roots_mutex);
 }
 
-CAMLexport caml_root caml_create_root(value init)
+CAMLexport caml_root caml_create_root(cdst cds, value init)
 {
   CAMLparam1(init);
-  value v = caml_alloc_shr(3, 0);
-  caml_initialize_field(v, 0, init);
-  caml_initialize_field(v, 1, Val_int(1));
+  value v = caml_alloc_shr(cds, 3, 0);
+  caml_initialize_field(cds, v, 0, init);
+  caml_initialize_field(cds, v, 1, Val_int(1));
 
   caml_plat_lock(&roots_mutex);
-  caml_initialize_field(v, 2, roots_all);
+  caml_initialize_field(cds, v, 2, roots_all);
   roots_all = v;
   caml_plat_unlock(&roots_mutex);
 
   CAMLreturnT(caml_root, (caml_root)v);
 }
 
-CAMLexport void caml_delete_root(caml_root root)
+CAMLexport void caml_delete_root(cdst cds, caml_root root)
 {
   value v = (value)root;
   Assert(root);
   /* the root will be removed from roots_all and freed at the next GC */
-  caml_modify_field(v, 0, Val_unit);
-  caml_modify_field(v, 1, Val_int(0));
+  caml_modify_field(cds, v, 0, Val_unit);
+  caml_modify_field(cds, v, 1, Val_int(0));
 }
 
-CAMLexport value caml_read_root(caml_root root)
+CAMLexport value caml_read_root(cdst cds, caml_root root)
 {
   value v = (value)root;
   Assert(root);
   return Field(v, 0);
 }
 
-CAMLexport void caml_modify_root(caml_root root, value newv)
+CAMLexport void caml_modify_root(cdst cds, caml_root root, value newv)
 {
   value v = (value)root;
   Assert(root);
-  caml_modify_field(v, 0, newv);
+  caml_modify_field(cds, v, 0, newv);
 }
 
-static void scan_global_roots(scanning_action f)
+static void scan_global_roots(cdst cds, scanning_action f)
 {
   value r, newr;
   caml_plat_lock(&roots_mutex);
@@ -95,11 +95,11 @@ static void scan_global_roots(scanning_action f)
 
   Assert(!Is_minor(r));
   newr = r;
-  f(newr, &newr);
+  f(cds, newr, &newr);
   Assert(r == newr); /* GC should not move r, it is not young */
 }
 
-void caml_cleanup_deleted_roots()
+void caml_cleanup_deleted_roots(cdst cds)
 {
   value r, prev;
   int first = 1;
@@ -113,7 +113,7 @@ void caml_cleanup_deleted_roots()
       if (first) {
         roots_all = next;
       } else {
-        caml_modify_field(prev, 2, next);
+        caml_modify_field(cds, prev, 2, next);
       }
     }
 
@@ -183,8 +183,8 @@ static void scan_native_globals(scanning_action f)
 
 #endif
 
-void caml_scan_global_roots(scanning_action f) {
-  scan_global_roots(f);
+void caml_scan_global_roots(cdst cds, scanning_action f) {
+  scan_global_roots(cds, f);
 #ifdef NATIVE_CODE
   scan_native_globals(f);
 #endif

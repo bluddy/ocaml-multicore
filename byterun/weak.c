@@ -28,37 +28,37 @@ value caml_array_blit(value, value, value, value, value); /* array.c */
 
 #define None_val (Val_int(0))
 
-CAMLprim value caml_weak_create (value len)
+CAMLprim value caml_weak_create (cdst cds, value len)
 {
-  value res = caml_alloc(len, 0);
+  value res = caml_alloc(cds, len, 0);
   int i;
   for (i = 0; i < len; i++) 
-    caml_initialize_field(res, i, None_val);
+    caml_initialize_field(cds, res, i, None_val);
   return res;
 }
 
-CAMLprim value caml_weak_set (value ar, value n, value el)
+CAMLprim value caml_weak_set (cdst cds, value ar, value n, value el)
 {
-  caml_modify_field(ar, n, el);
+  caml_modify_field(cds, ar, n, el);
   return Val_unit;
 }
 
-CAMLprim value caml_weak_get (value ar, value n)
+CAMLprim value caml_weak_get (cdst cds, value ar, value n)
 {
   return Field(ar, n);
 }
 
-CAMLprim value caml_weak_get_copy (value ar, value n)
+CAMLprim value caml_weak_get_copy (cdst cds, value ar, value n)
 {
   caml_failwith("weak_get_copy unsupported");
 }
 
-CAMLprim value caml_weak_check (value ar, value n)
+CAMLprim value caml_weak_check (cdst cds, value ar, value n)
 {
   caml_failwith("weak_check unsupported");
 }
 
-CAMLprim value caml_weak_blit (value ars, value ofs,
+CAMLprim value caml_weak_blit (cdst cds, value ars, value ofs,
                                value ard, value ofd, value len)
 {
   return caml_array_blit(ars, ofs, ard, ofd, len);

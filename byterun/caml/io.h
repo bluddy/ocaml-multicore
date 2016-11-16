@@ -75,7 +75,7 @@ CAMLextern struct channel * caml_open_descriptor_in (int);
 CAMLextern struct channel * caml_open_descriptor_out (int);
 CAMLextern void caml_close_channel (struct channel *);
 CAMLextern int caml_channel_binary_mode (struct channel *);
-CAMLextern value caml_alloc_channel(struct channel *chan);
+CAMLextern value caml_alloc_channel(cdst, struct channel *chan);
 
 CAMLextern int caml_flush_partial (struct channel *);
 CAMLextern void caml_flush (struct channel *);
@@ -96,7 +96,7 @@ CAMLextern struct channel * caml_all_opened_channels;
 
 /* Conversion between file_offset and int64 */
 
-#define Val_file_offset(fofs) caml_copy_int64(fofs)
+#define Val_file_offset(fofs) caml_copy_int64(cds, fofs)
 #define File_offset_val(v) ((file_offset) Int64_val(v))
 
 #endif /* CAML_IO_H */
